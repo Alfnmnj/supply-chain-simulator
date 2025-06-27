@@ -1,4 +1,4 @@
-# app.py (Strategic Simulation Platform v5.1 - Indentation Corrected & Final)
+# app.py (Strategic Simulation Platform v5.2 - Final Bug Fix)
 
 import streamlit as st
 import pandas as pd
@@ -108,12 +108,16 @@ with st.sidebar:
                 with c1:
                     var['name'] = st.text_input("Variable Name", var['name'], key=f"name_{i}").replace(" ", "_"); var['dist'] = st.selectbox("Distribution", ["Normal", "Uniform", "Constant"], index=["Normal", "Uniform", "Constant"].index(var['dist']), key=f"dist_{i}")
                     if var['dist'] == "Normal": p1, p2 = st.columns(2); var['param1'] = p1.number_input("Mean (μ)", value=var['param1'], key=f"p1_{i}"); var['param2'] = p2.number_input("Std Dev (σ)", value=var['param2'], key=f"p2_{i}", min_value=0.0)
-                    elif var['dist'] == "Uniform": p1, p2 = st.columns(2); var['param1'] = p1.number_input("Min", value=var['param1'], key=f"p1_{i}"); var['param2'] = p2.number_input("Max", valuevar['param2'], key=f"p2_{i}")
-                    else: var['param1'] = st.number_input("Value", value=var['param1'], key=f"p1_{i}"); var['param2'] = 0
+                    elif var['dist'] == "Uniform": 
+                        p1, p2 = st.columns(2)
+                        var['param1'] = p1.number_input("Min", value=var['param1'], key=f"p1_{i}")
+                        # ** THE FIX IS HERE: The typo 'valuevar' is corrected to 'value=var'. **
+                        var['param2'] = p2.number_input("Max", value=var['param2'], key=f"p2_{i}")
+                    else: 
+                        var['param1'] = st.number_input("Value", value=var['param1'], key=f"p1_{i}"); var['param2'] = 0
                 with c2: 
                     st.write("")
                     st.write("")
-                    # ** THE FIX IS HERE: This line is now correctly aligned. **
                     if st.button("🗑️", key=f"del_{i}", help="Remove", use_container_width=True):
                         st.session_state.variables.pop(i)
                         st.rerun()
