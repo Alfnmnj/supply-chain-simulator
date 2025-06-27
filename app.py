@@ -1,4 +1,4 @@
-# app.py (Strategic Simulation Platform v6.0 - Step-by-Step Model Builder)
+# app.py (Strategic Simulation Platform v6.1 - Final & Verified)
 
 import streamlit as st
 import pandas as pd
@@ -48,7 +48,6 @@ def build_formula_from_steps():
 # 3. CORE SIMULATION ENGINE (Unchanged)
 # ==============================================================================
 def run_monte_carlo(formula, variables, num_simulations):
-    # This robust engine remains the same
     simulation_results = []
     for _ in range(num_simulations):
         local_scope = {var['name']: (np.random.normal(var['param1'], var['param2']) if var['dist'] == 'Normal' else
@@ -69,7 +68,6 @@ with st.sidebar:
     st.radio("Select Analysis Mode", ["Beginner", "Advanced"], key="mode", horizontal=True)
     st.divider()
 
-    # --- BEGINNER MODE UI ---
     if st.session_state.mode == "Beginner":
         st.markdown("<h5><i class='bi bi-truck'></i> Supply Chain Risk Model</h5>", unsafe_allow_html=True)
         st.info("Adjust these high-level drivers to model your scenario.", icon="💡")
@@ -87,26 +85,34 @@ with st.sidebar:
         ]
         sim_formula = "(Base_Unit_Cost * (1 + Tariff_Rate)) + Disruption_Premium"
         
-    # --- ADVANCED MODE UI ---
-    else:
+    else: # Advanced Mode
         st.markdown('<h5><i class="bi bi-sliders"></i> 1. Define Input Variables</h5>', unsafe_allow_html=True)
         for i, var in enumerate(st.session_state.variables):
-            # (UI for variable definition is unchanged)
             with st.container():
-                c1,c2 = st.columns([0.85, 0.15]);
+                c1,c2 = st.columns([0.85, 0.15])
                 with c1:
-                    var['name'] = st.text_input("Variable Name", var['name'], key=f"name_{i}").replace(" ", "_"); var['dist'] = st.selectbox("Distribution", ["Normal", "Uniform", "Constant"], index=["Normal", "Uniform", "Constant"].index(var['dist']), key=f"dist_{i}")
+                    var['name'] = st.text_input("Variable Name", var['name'], key=f"name_{i}").replace(" ", "_")
+                    var['dist'] = st.selectbox("Distribution", ["Normal", "Uniform", "Constant"], index=["Normal", "Uniform", "Constant"].index(var['dist']), key=f"dist_{i}")
                     if var['dist'] == "Normal": p1, p2 = st.columns(2); var['param1'] = p1.number_input("Mean (μ)", value=var['param1'], key=f"p1_{i}"); var['param2'] = p2.number_input("Std Dev (σ)", value=var['param2'], key=f"p2_{i}", min_value=0.0)
                     elif var['dist'] == "Uniform": p1, p2 = st.columns(2); var['param1'] = p1.number_input("Min", value=var['param1'], key=f"p1_{i}"); var['param2'] = p2.number_input("Max", value=var['param2'], key=f"p2_{i}")
                     else: var['param1'] = st.number_input("Value", value=var['param1'], key=f"p1_{i}"); var['param2'] = 0
-                with c2: st.write(""); st.write("");
-                    if st.button("🗑️", key=f"del_{i}", help="Remove", use_container_width=True): st.session_state.variables.pop(i); st.rerun()
+                with c2: 
+                    st.write("")
+                    st.write("")
+                    # ** THE FIX IS HERE. This line has been correctly aligned. **
+                    if st.button("🗑️", key=f"del_{i}", help="Remove", use_container_width=True):
+                        st.session_state.variables.pop(i)
+                        st.rerun()
                 st.markdown("<hr style='margin:10px 0; border-color: #30363d;'>", unsafe_allow_html=True)
-        if st.button("Add Variable", use_container_width=True): st.session_state.variables.append({'name': f'Var_{len(st.session_state.variables)+1}', 'dist': 'Normal', 'param1': 100.0, 'param2': 10.0}); st.rerun()
+        if st.button("Add Variable", use_container_width=True): 
+            st.session_state.variables.append({'name': f'Var_{len(st.session_state.variables)+1}', 'dist': 'Normal', 'param1': 100.0, 'param2': 10.0})
+            st.rerun()
         
         st.divider()
         st.markdown('<h5><i class="bi bi-diagram-3-fill"></i> 2. Build Your Model Step-by-Step</h5>', unsafe_allow_html=True)
         var_names = [v['name'] for v in st.session_state.variables]
+        if not var_names: var_names = [None]
+        
         st.session_state.start_variable = st.selectbox("Start calculation with variable:", var_names, index=var_names.index(st.session_state.start_variable) if st.session_state.start_variable in var_names else 0)
         
         for i, step in enumerate(st.session_state.model_steps):
@@ -122,7 +128,8 @@ with st.sidebar:
         if st.button("Add Step", use_container_width=True): st.session_state.model_steps.append({'op': 'Add', 'type': 'Constant', 'val': 10.0}); st.rerun()
 
         sim_formula = build_formula_from_steps()
-        st.success(f"Generated Formula: `{sim_formula}`", icon="✅") if sim_formula else st.warning("Your model is not yet complete.", icon="⚠️")
+        if sim_formula: st.success(f"Generated Formula: `{sim_formula}`", icon="✅")
+        
         sim_vars = st.session_state.variables
 
     st.divider()
@@ -130,13 +137,11 @@ with st.sidebar:
     num_simulations = st.select_slider("Simulation Runs", [1000, 10000, 20000, 50000], value=10000)
     run_button = st.button("Run Simulation", use_container_width=True, type="primary")
 
-# --- Main Panel for Results ---
 if run_button:
     if not sim_vars or not sim_formula: st.warning("Please configure your model in the sidebar before running.", icon="⚠️")
     else:
         results = run_monte_carlo(sim_formula, sim_vars, num_simulations)
         if results is not None:
-            # The entire results dashboard remains unchanged as it is robust and professional
             st.markdown("<h3><i class='bi bi-clipboard-data-fill'></i> Simulation Dashboard</h3>", unsafe_allow_html=True)
             mean_val, std_val = results.mean(), results.std(); p5, p95 = np.percentile(results, 5), np.percentile(results, 95)
             col1, col2, col3 = st.columns(3, gap="large")
