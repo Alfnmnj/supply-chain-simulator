@@ -1,9 +1,10 @@
-# app.py (Definitive "Fortune 500 / Apple-Themed" Version)
+# app.py (Definitive, High-Impact Version)
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+import plotly.express as px
 import random
 
 # ==============================================================================
@@ -11,17 +12,17 @@ import random
 # ==============================================================================
 st.set_page_config(page_title="Strategic Resilience Console", page_icon="◈", layout="wide")
 
-# This is the core of the new UI: premium fonts, light theme, and custom component styles
+# This is the core of the new UI: premium dark theme, fonts, and custom component styles
 st.markdown("""
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         html, body, [class*="st-"] { font-family: 'Inter', sans-serif; }
-        .stApp { background-color: #F0F2F6; }
-        h1, h2, h3 { font-weight: 700; color: #1E1E1E; }
+        .stApp { background-color: #0E1117; color: #FAFAFA; }
+        h1, h2, h3 { font-weight: 700; color: #FFFFFF; }
         .card {
-            background-color: #FFFFFF; border-radius: 12px; padding: 25px;
-            border: 1px solid #E0E0E0; box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            background-color: #161B22; border-radius: 12px; padding: 25px;
+            border: 1px solid #30363D;
         }
         .stMetric { background-color: transparent; border: none; padding: 0; }
         .stButton>button {
@@ -29,16 +30,16 @@ st.markdown("""
             border-radius: 8px; border: none; padding: 12px 24px; transition: all 0.2s ease-in-out;
         }
         .stButton>button:hover { background-color: #0056b3; }
-        .st-emotion-cache-16txtl3 { background-color: #FFFFFF; border-right: 1px solid #E0E0E0; }
+        .st-emotion-cache-16txtl3 { background-color: #0D1117; border-right: 1px solid #30363D; }
         i[data-lucide] {
             width: 18px; height: 18px; stroke-width: 2.5px;
-            vertical-align: -0.125em; margin-right: 0.75rem; color: #555555;
+            vertical-align: -0.125em; margin-right: 0.75rem; color: #8B949E;
         }
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. DATA LOADING & CORE SIMULATION ENGINE
+# 2. DATA LOADING & CORE SIMULATION ENGINE (The "Guts")
 # ==============================================================================
 @st.cache_data
 def load_data():
@@ -95,12 +96,6 @@ def run_full_simulation(strategy_name, strategy_df, scenario):
     summary={'Strategy':strategy_name, 'Weighted Avg Cost ($)':np.average(df_results['Final Cost ($)'],weights=df_results['Sourcing %']), 'Weighted Avg Lead Time (days)':np.average(df_results['Final Lead Time (days)'],weights=df_results['Sourcing %']), 'Weighted Avg Stockout Risk (%)':np.average(df_results['Stockout Risk (%)'],weights=df_results['Sourcing %'])}
     return summary, df_results
 
-def calculate_resilience_score(risk_pct, cost, lead_time, max_cost, max_lt):
-    risk_score = (100 - min(risk_pct, 100)) * 0.6  # 60% weight
-    cost_score = (1 - min(cost / max_cost, 1)) * 100 * 0.2 # 20% weight
-    lt_score = (1 - min(lead_time / max_lt, 1)) * 100 * 0.2 # 20% weight
-    return risk_score + cost_score + lt_score
-
 # ==============================================================================
 # 4. APPLICATION UI LAYOUT
 # ==============================================================================
@@ -133,58 +128,57 @@ if run_button:
                 all_results.append(summary)
         results_df = pd.DataFrame(all_results).set_index('Strategy')
 
-        st.markdown("<h2><i data-lucide='layout-dashboard'></i> Executive Summary</h2>", unsafe_allow_html=True)
+        st.markdown("<h2><i data-lucide='layout-dashboard'></i> Executive Dashboard</h2>", unsafe_allow_html=True)
         
         baseline_kpis = results_df.loc['Baseline']
         resilient_kpis = results_df.loc['Resilient'] if 'Resilient' in results_df.index else baseline_kpis
         
-        # --- Main Recommendation Card ---
-        st.markdown(f"""
-        <div class="card">
-            <h3 style="color: #007AFF;"><i data-lucide='check-circle'></i> Recommendation: Adopt the Resilient Strategy</h3>
-            <p style="font-size: 1.1rem; color: #555555;">The simulation indicates that diversifying the supply chain for the <b>{selected_component}</b> by partnering with <b>{alt_supplier_name}</b> is the optimal path forward. This strategic investment effectively mitigates catastrophic production risk for a quantifiable cost premium.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # --- Resilience Score & KPIs ---
-        max_cost_norm = master_df['Unit Cost ($)'].max(); max_lt_norm = master_df['Avg Lead Time (days)'].max()
-        baseline_score = calculate_resilience_score(baseline_kpis['Weighted Avg Stockout Risk (%)'], baseline_kpis['Weighted Avg Cost ($)'], baseline_kpis['Weighted Avg Lead Time (days)'], max_cost_norm, max_lt_norm)
-        resilient_score = calculate_resilience_score(resilient_kpis['Weighted Avg Stockout Risk (%)'], resilient_kpis['Weighted Avg Cost ($)'], resilient_kpis['Weighted Avg Lead Time (days)'], max_cost_norm, max_lt_norm)
-        
-        st.markdown("<div class='card' style='margin-top: 1.5rem;'><div style='display: flex; justify-content: space-around;'>", unsafe_allow_html=True)
-        kpi1, kpi2 = st.columns(2)
-        with kpi1: st.metric("Baseline Resilience Score", f"{baseline_score:.0f}/100", delta=f"{baseline_kpis['Weighted Avg Stockout Risk (%)']:.1f}% Risk", delta_color="inverse")
-        with kpi2: st.metric("Resilient Resilience Score", f"{resilient_score:.0f}/100", delta=f"{resilient_score - baseline_score:.0f} pts", delta_color="normal")
+        # --- Top-Line KPI Cards ---
+        st.markdown("<div class='card'><div style='display: flex; justify-content: space-around;'>", unsafe_allow_html=True)
+        kpi1, kpi2, kpi3 = st.columns(3)
+        risk_reduction = baseline_kpis['Weighted Avg Stockout Risk (%)'] - resilient_kpis['Weighted Avg Stockout Risk (%)']
+        cost_increase_pct = ((resilient_kpis['Weighted Avg Cost ($)'] - baseline_kpis['Weighted Avg Cost ($)']) / baseline_kpis['Weighted Avg Cost ($)']) * 100
+        kpi1.metric("Resilient Strategy Risk", f"{resilient_kpis['Weighted Avg Stockout Risk (%)']:.1f}%", f"-{risk_reduction:.1f} pts vs Baseline")
+        kpi2.metric("Cost of Resilience (Unit)", f"${resilient_kpis['Weighted Avg Cost ($)']:.2f}", f"{cost_increase_pct:+.1f}% vs Baseline")
+        kpi3.metric("Lead Time Improvement", f"{resilient_kpis['Weighted Avg Lead Time (days)']:.0f} Days", f"{resilient_kpis['Weighted Avg Lead Time (days)'] - baseline_kpis['Weighted Avg Lead Time (days)']:.0f} days")
         st.markdown("</div></div>", unsafe_allow_html=True)
 
-        # --- The "Hero" Waterfall Chart ---
-        st.markdown("<h3 style='margin-top: 2rem;'><i data-lucide='trending-up'></i> The Business Case for Resilience</h3>", unsafe_allow_html=True)
-        base_cost_annual = baseline_kpis['Weighted Avg Cost ($)'] * annual_volume
-        cost_of_risk_annual = (baseline_kpis['Weighted Avg Stockout Risk (%)'] / 100) * (annual_volume / 365) * line_down_cost * 365
-        resilient_cost_annual = resilient_kpis['Weighted Avg Cost ($)'] * annual_volume
-        
-        fig_waterfall = go.Figure(go.Waterfall(
-            orientation = "v", measure = ["absolute", "relative", "total", "relative", "absolute"],
-            x = ["Baseline Cost", "Monetized Risk", "Total Risk Exposure", "Resilience Investment", "Final Resilient Cost"],
-            text = [f"${v/1e6:.2f}M" for v in [base_cost_annual, cost_of_risk_annual, 0, resilient_cost_annual - base_cost_annual, resilient_cost_annual]],
-            y = [base_cost_annual, cost_of_risk_annual, 0, resilient_cost_annual - base_cost_annual, 0],
-            increasing = {"marker":{"color":"#FF3B30"}}, decreasing = {"marker":{"color":"#34C759"}}, totals = {"marker":{"color":"#555555"}}
+        # --- The "Hero" Quadrant Chart ---
+        st.markdown("<h3 style='margin-top: 2rem;'><i data-lucide='compass'></i> Strategy Positioning: Risk vs. Cost</h3>", unsafe_allow_html=True)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=results_df['Weighted Avg Cost ($)'], y=results_df['Weighted Avg Stockout Risk (%)'],
+            mode='markers+text', text=results_df.index,
+            marker=dict(size=20, color=['#dc3545', '#007AFF'], symbol=['x', 'circle']),
+            textposition="top center", textfont=dict(size=14)
         ))
-        fig_waterfall.update_layout(title="Financial Impact of Resilience Strategy (Annualized)", showlegend=False, paper_bgcolor='white', plot_bgcolor='white', font_color='#1E1E1E')
-        st.plotly_chart(fig_waterfall, use_container_width=True)
+        if 'Resilient' in results_df.index:
+            fig.add_annotation(x=resilient_kpis['Weighted Avg Cost ($)'], y=resilient_kpis['Weighted Avg Stockout Risk (%)'],
+                               ax=baseline_kpis['Weighted Avg Cost ($)'], ay=baseline_kpis['Weighted Avg Stockout Risk (%)'],
+                               text="Journey to Resilience", arrowhead=2, arrowwidth=2, arrowcolor="#007AFF", font=dict(color="#007AFF"))
+        fig.update_layout(xaxis_title='Landed Cost per Unit ($)', yaxis_title='Stockout Risk (%)', template='plotly_dark', showlegend=False, paper_bgcolor="#161B22", plot_bgcolor="#161B22")
+        st.plotly_chart(fig, use_container_width=True)
 
-        with st.expander("Show Executive Briefing & BCP"):
+        # --- Dynamic BCP / Executive Briefing ---
+        with st.expander("Show Executive Briefing & Business Continuity Plan", expanded=True):
+            cost_of_risk = (baseline_kpis['Weighted Avg Stockout Risk (%)'] / 100) * (annual_volume / 365) * line_down_cost * 365
             st.markdown(f"""
-            <h3><i data-lucide="file-text"></i> Executive Briefing: Business Continuity for {selected_component}</h3><hr>
-            <h4><i data-lucide="alert-triangle"></i> Situation</h4>
-            <p>Under a simulated geopolitical disruption in <b>{country_to_disrupt}</b>, our current single-source strategy exposes the company to a <b>{baseline_kpis['Weighted Avg Stockout Risk (%)']:.1f}% probability of production halt</b>, an unacceptable level of operational risk.</p>
-            <h4><i data-lucide="dollar-sign"></i> Impact Analysis & Business Case</h4>
-            <p>The financial analysis indicates that the 'do nothing' approach carries a monetized risk of approximately <b>${cost_of_risk_annual/1e6:.2f} million per year</b>. Our proposed resilient strategy represents a net investment (additional component cost) that mitigates this far greater risk, moving us to a secure and stable operational state.</p>
-            <h4><i data-lucide="move-right"></i> Recommended Action Plan</h4>
+            <h4><i data-lucide="file-text"></i> Executive Briefing: BCP for {selected_component}</h4><hr>
+            <h5><i data-lucide="alert-triangle"></i> 1. Situation Analysis</h5>
+            <p>Under a geopolitical disruption in <b>{country_to_disrupt}</b>, our current single-source strategy for the <b>{selected_component}</b> exposes the company to a <b>{baseline_kpis['Weighted Avg Stockout Risk (%)']:.1f}% probability of stockout</b>. This translates to a monetized annual risk exposure of approximately <b>${cost_of_risk/1e6:.2f} million</b>, an unacceptable threat to our revenue and production targets.</p>
+            
+            <h5><i data-lucide="dollar-sign"></i> 2. The Business Case for Resilience</h5>
+            <p>We recommend a strategic investment in supply chain resilience by diversifying our sourcing to include <b>{alt_supplier_name}</b>. This action has a clear and compelling business case:</p>
+            <ul>
+                <li><b>The Investment:</b> A calculated <b>{cost_increase_pct:.1f}% increase</b> in the component's landed cost.</li>
+                <li><b>The Return:</b> We mitigate the multi-million dollar risk exposure by "buying down" our stockout probability by <b>{risk_reduction:.1f} percentage points</b>, achieving a stable, resilient state at <b>{resilient_kpis['Weighted Avg Stockout Risk (%)']:.1f}%</b>.</li>
+            </ul>
+            
+            <h5><i data-lucide="move-right"></i> 3. Recommended Action Plan</h5>
             <ol>
-                <li><b>Approve Resilient Strategy:</b> Formally approve the dual-sourcing strategy with <b>{alt_supplier_name}</b> at a {sourcing_split}/{100-sourcing_split} volume allocation.</li>
-                <li><b>Initiate Supplier Onboarding:</b> Immediately assign a cross-functional team to begin the technical qualification and contracting process.</li>
-                <li><b>Secure Bridge Inventory:</b> Authorize procurement to build a 60-day strategic buffer of the primary component to ensure supply continuity during the transition.</li>
+                <li><b>Approve Resilient Strategy:</b> Formally approve the dual-sourcing strategy with a {sourcing_split}/{100-sourcing_split} volume allocation for the <b>{selected_component}</b>.</li>
+                <li><b>Initiate Supplier Onboarding:</b> Immediately assign a cross-functional task force to begin the technical qualification and contracting process with <b>{alt_supplier_name}</b>.</li>
+                <li><b>Secure Bridge Inventory:</b> Authorize procurement to build a 60-day strategic buffer of the primary component to ensure supply continuity during the transition period.</li>
             </ol>
             """, unsafe_allow_html=True)
 else:
