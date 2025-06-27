@@ -1,4 +1,4 @@
-# app.py (Definitive Version with Geopolitical Scenario Builder)
+# app.py (Definitive Version with Full Visualization Suite)
 
 import streamlit as st
 import pandas as pd
@@ -13,7 +13,7 @@ import random
 # ==============================================================================
 # 1. PAGE CONFIGURATION & STYLING
 # ==============================================================================
-st.set_page_config(page_title="Strategic Resilience Console", page_icon="◈", layout="wide")
+st.set_page_config(page_title="Strategic Risk Dashboard", page_icon="◈", layout="wide")
 
 st.markdown("""
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -55,7 +55,6 @@ def load_data():
 
 master_df, stockout_inputs = load_data()
 
-# --- Pre-defined Geopolitical Event Templates ---
 EVENT_TEMPLATES = {
     "Normal Operations": {'export_ban_country': 'None', 'export_ban_percent': 0, 'tariff_country': 'None', 'tariff_percent': 0, 'transit_delay': 0, 'supplier_shutdown_prob': 0.0},
     "Taiwan Strait Conflict": {'export_ban_country': 'Taiwan', 'export_ban_percent': 75, 'tariff_country': 'Taiwan', 'tariff_percent': 25, 'transit_delay': 30, 'supplier_shutdown_prob': 0.5},
@@ -63,7 +62,6 @@ EVENT_TEMPLATES = {
     "Korean Peninsula Tensions": {'export_ban_country': 'South Korea', 'export_ban_percent': 40, 'tariff_country': 'South Korea', 'tariff_percent': 15, 'transit_delay': 10, 'supplier_shutdown_prob': 0.3}
 }
 
-# (Simulation functions remain unchanged)
 def generate_dynamic_strategies(component, primary_supplier, alt_supplier_name, sourcing_split, df):
     strategies = {};
     if primary_supplier.empty: return strategies
@@ -97,6 +95,21 @@ def run_full_simulation(strategy_df, scenario):
         total_cost += cost * sourcing_pct; total_lt += row['Base Lead Time (days)'] * sourcing_pct; total_risk += stockout_risk * sourcing_pct
     return {'Cost': total_cost, 'Lead Time': total_lt, 'Stockout Risk': total_risk * 100}
 
+def generate_pdf_report(results_df, scenario, component):
+    # (PDF generation code remains the same as the corrected version)
+    pdf = FPDF(); pdf.add_page(); pdf.set_font('Arial', 'B', 16); pdf.cell(0, 10, f'Strategic Risk Briefing: {component}', 0, 1, 'C'); pdf.ln(5)
+    pdf.set_font('Arial', 'B', 12); pdf.cell(0, 10, 'Disruption Scenario Parameters', 0, 1)
+    pdf.set_font('Arial', '', 10)
+    for key, value in scenario.items(): pdf.multi_cell(0, 5, f'{key.replace("_", " ").title()}: {value}')
+    pdf.ln(5); pdf.set_font('Arial', 'B', 12); pdf.cell(0, 10, 'Strategy Impact Analysis', 0, 1)
+    pdf.set_font('Arial', 'B', 10); col_widths = [60, 40, 40, 40]; header = ['Strategy'] + list(results_df.columns)
+    for i, h in enumerate(header): pdf.cell(col_widths[i], 7, h, 1, 0, 'C');
+    pdf.ln()
+    pdf.set_font('Arial', '', 10)
+    for index, row in results_df.iterrows():
+        pdf.cell(col_widths[0], 6, index, 1); pdf.cell(col_widths[1], 6, f"${row['Cost']:.2f}", 1); pdf.cell(col_widths[2], 6, f"{row['Lead Time']:.0f} days", 1); pdf.cell(col_widths[3], 6, f"{row['Stockout Risk']:.1f}%", 1); pdf.ln()
+    return pdf.output(dest='S').encode('latin1')
+
 # ==============================================================================
 # 3. SIDEBAR / CONTROLS
 # ==============================================================================
@@ -107,17 +120,10 @@ with st.sidebar:
     alt_suppliers = master_df[(master_df['Component']==selected_component) & (~master_df['Is Primary'])]
     alt_supplier_name, sourcing_split = (st.selectbox("Alternative Supplier", alt_suppliers['Supplier'].unique()), st.slider("Primary Supplier Sourcing %", 0, 100, 60, 5)) if not alt_suppliers.empty else (None, 100)
     
-    st.divider()
-    st.subheader("Geopolitical Scenario Builder")
-    
-    def on_template_change():
-        st.session_state.update(EVENT_TEMPLATES[st.session_state.event_template])
-
+    st.divider(); st.subheader("Geopolitical Scenario Builder")
+    def on_template_change(): st.session_state.update(EVENT_TEMPLATES[st.session_state.event_template])
     selected_event = st.selectbox("Select Event Template", options=EVENT_TEMPLATES.keys(), key="event_template", on_change=on_template_change)
-
-    st.markdown("---")
-    st.markdown("_Customize the selected event's parameters below:_")
-    
+    st.markdown("---"); st.markdown("_Customize the selected event's parameters below:_")
     scenario = {
         'export_ban_country': st.selectbox("Export Ban from", ["None", "China", "Taiwan", "South Korea"], key='export_ban_country'),
         'export_ban_percent': st.slider("Export Ban Intensity (%)", 0, 100, key='export_ban_percent'),
@@ -136,11 +142,10 @@ if run_button:
     if primary_supplier.empty: st.error(f"No primary supplier defined for {selected_component}.")
     else:
         strategies = generate_dynamic_strategies(selected_component, primary_supplier, alt_supplier_name, sourcing_split, master_df)
-        with st.spinner(f"Simulating '{selected_event}' scenario..."):
-            results = {name: run_full_simulation(df, scenario) for name, df in strategies.items()}
+        with st.spinner(f"Simulating '{selected_event}' scenario..."): results = {name: run_full_simulation(df, scenario) for name, df in strategies.items()}
         results_df = pd.DataFrame(results).T
 
-        st.markdown("<h2><i data-lucide='layout-dashboard'></i> Executive Dashboard</h2>", unsafe_allow_html=True)
+        st.markdown("<h2><i data-lucide='layout-dashboard'></i> Executive Summary Dashboard</h2>", unsafe_allow_html=True)
         
         baseline_kpis = results_df.loc['Baseline']
         resilient_kpis = results_df.loc['Resilient'] if 'Resilient' in results_df.index else baseline_kpis
@@ -151,34 +156,63 @@ if run_button:
         with col1: st.metric("Baseline Stockout Risk", f"{baseline_kpis['Stockout Risk']:.1f}%")
         with col2: st.metric("Resilient Strategy Risk", f"{resilient_kpis['Stockout Risk']:.1f}%", f"{-risk_reduction:.1f} pts")
         with col3: st.metric("Cost of Resilience", f"{cost_increase_pct:+.1f}%")
-        
-        # --- The Hero Visual: Risk vs Cost Quadrant ---
-        st.markdown("<h3 style='margin-top: 2rem;'><i data-lucide='compass'></i> Strategy Positioning: Risk vs. Cost</h3>", unsafe_allow_html=True)
-        results_df['Strategy'] = results_df.index
-        fig_matrix = px.scatter(results_df, x="Cost", y="Stockout Risk", size="Lead Time", color="Strategy",
-                                title=f"Strategy Comparison under '{selected_event}' Scenario", template="plotly_dark", size_max=40,
-                                labels={"Cost": "Landed Cost per Unit ($)", "Stockout Risk": "Stockout Risk (%)"})
-        if 'Resilient' in results_df.index:
-            fig_matrix.add_annotation(x=resilient_kpis['Cost'], y=resilient_kpis['Stockout Risk'],
-                                      ax=baseline_kpis['Cost'], ay=baseline_kpis['Stockout Risk'],
-                                      text="Journey to Resilience", arrowhead=2, arrowwidth=2, arrowcolor="#007AFF", font=dict(color="#007AFF"))
-        st.plotly_chart(fig_matrix, use_container_width=True)
 
-        with st.expander("Show Executive Briefing & Business Continuity Plan", expanded=True):
+        tab1, tab2, tab3, tab4 = st.tabs(["📊 Strategic Overview", "💰 Financial Analysis", "🌪️ Sensitivity Analysis", "📄 BCP Report"])
+
+        with tab1:
+            st.subheader("Strategy Positioning: Risk vs. Cost")
+            results_df['Strategy'] = results_df.index
+            fig_matrix = px.scatter(results_df, x="Cost", y="Stockout Risk", size="Lead Time", color="Strategy",
+                                    title=f"Strategy Comparison under '{selected_event}' Scenario", template="plotly_dark", size_max=40,
+                                    labels={"Cost": "Landed Cost per Unit ($)", "Stockout Risk": "Stockout Risk (%)"})
+            if 'Resilient' in results_df.index:
+                fig_matrix.add_annotation(x=resilient_kpis['Cost'], y=resilient_kpis['Stockout Risk'], ax=baseline_kpis['Cost'], ay=baseline_kpis['Stockout Risk'],
+                                          text="Journey to Resilience", arrowhead=2, arrowwidth=2, arrowcolor="#007AFF", font=dict(color="#007AFF"))
+            st.plotly_chart(fig_matrix, use_container_width=True)
+
+        with tab2:
+            st.subheader("Financial Breakdown: The Business Case for Resilience")
+            cost_of_risk = (baseline_kpis['Stockout Risk'] / 100) * (30 * 1000) # Simplified monetized risk
+            fig_waterfall = go.Figure(go.Waterfall(
+                measure = ["absolute", "relative", "total", "relative", "absolute"],
+                x = ["Baseline Cost", "Monetized Risk", "Total Risk Exposure", "Resilience Investment", "Final Resilient Cost"],
+                y = [baseline_kpis['Cost'], cost_of_risk, 0, resilient_kpis['Cost'] - baseline_kpis['Cost'], 0],
+                totals = {"marker":{"color":"#8B949E"}}
+            ))
+            fig_waterfall.update_layout(title="Cost Analysis: Baseline vs. Resilient Strategy", template="plotly_dark", paper_bgcolor="#161B22", plot_bgcolor="#161B22")
+            st.plotly_chart(fig_waterfall, use_container_width=True)
+
+        with tab3:
+            st.subheader("Tornado Chart: Cost Sensitivity")
+            st.info("How do different risk drivers impact the total cost of the Resilient Strategy?")
+            sens_data = []
+            base_cost = resilient_kpis['Cost']
+            drivers = {'Tariff +10%': {'key': 'tariff_percent', 'delta': 10}, 'Delay +7 days': {'key': 'transit_delay', 'delta': 7}, 'Shutdown Prob. +10%': {'key': 'supplier_shutdown_prob', 'delta': 0.1}}
+            for name, d in drivers.items():
+                temp_scenario = scenario.copy(); temp_scenario[d['key']] += d['delta']
+                cost_after = run_full_simulation(strategies['Resilient'], temp_scenario)['Cost']
+                sens_data.append({'Driver': name, 'Impact ($)': cost_after - base_cost})
+            sens_df = pd.DataFrame(sens_data).sort_values(by='Impact ($)')
+            fig_tornado = px.bar(sens_df, x='Impact ($)', y='Driver', orientation='h', title="Impact of Risk Drivers on Total Cost", template="plotly_dark", text_auto='.2f')
+            st.plotly_chart(fig_tornado, use_container_width=True)
+
+        with tab4:
+            st.subheader("Executive Briefing & Business Continuity Plan")
+            st.download_button("📄 Download Full Report (PDF)", generate_pdf_report(results_df, scenario, selected_component), file_name=f"BCP_Report_{selected_component}.pdf", mime="application/pdf")
             st.markdown(f"""
-            <h4><i data-lucide="file-text"></i> Executive Briefing: BCP for {selected_component}</h4><hr>
-            <h5><i data-lucide="alert-triangle"></i> 1. Situation Analysis</h5>
-            <p>Under the simulated <b>'{selected_event}'</b> scenario, our current <b>Baseline (Single Source)</b> strategy for the <b>{selected_component}</b> faces a <b>{baseline_kpis['Stockout Risk']:.1f}% probability of stockout</b>. This represents a critical and unacceptable threat to our production continuity and revenue targets.</p>
-            
-            <h5><i data-lucide="dollar-sign"></i> 2. The Business Case for Resilience</h5>
-            <p>We recommend a strategic investment in supply chain resilience by diversifying our sourcing to include <b>{alt_supplier_name}</b>. This action has a clear and compelling business case: for a calculated <b>{cost_increase_pct:.1f}%</b> increase in component cost, we reduce our catastrophic risk exposure by <b>{risk_reduction:.1f} percentage points</b>, achieving a stable state at <b>{resilient_kpis['Stockout Risk']:.1f}% risk</b>.</p>
-            
-            <h5><i data-lucide="move-right"></i> 3. Recommended Action Plan</h5>
-            <ol>
-                <li><b>Approve Resilient Strategy:</b> Formally approve the dual-sourcing strategy with a {sourcing_split}/{100-sourcing_split} volume allocation for the <b>{selected_component}</b>.</li>
-                <li><b>Initiate Supplier Onboarding:</b> Immediately assign a cross-functional team (Engineering, Procurement, Quality) to begin the technical qualification and contracting process with <b>{alt_supplier_name}</b>.</li>
-                <li><b>Secure Bridge Inventory:</b> Authorize procurement to build a 60-day strategic buffer of the primary component to ensure supply continuity during the transition period.</li>
-            </ol>
+            <div class='card'>
+                <h4><i data-lucide="file-text"></i> BCP for: {selected_component}</h4><hr>
+                <h5><i data-lucide="alert-triangle"></i> 1. Situation Analysis</h5>
+                <p>Under the simulated <b>'{selected_event}'</b> scenario, our current <b>Baseline (Single Source)</b> strategy for the <b>{selected_component}</b> faces a <b>{baseline_kpis['Stockout Risk']:.1f}% probability of stockout</b>, representing a critical threat to production continuity.</p>
+                <h5><i data-lucide="dollar-sign"></i> 2. The Business Case for Resilience</h5>
+                <p>We recommend a strategic investment in diversifying our supply chain to include <b>{alt_supplier_name}</b>. This action has a clear business case: for a calculated <b>{cost_increase_pct:.1f}%</b> increase in component cost, we reduce our catastrophic risk exposure by <b>{risk_reduction:.1f} percentage points</b>, achieving a stable state at <b>{resilient_kpis['Stockout Risk']:.1f}% risk</b>.</p>
+                <h5><i data-lucide="move-right"></i> 3. Recommended Action Plan</h5>
+                <ol>
+                    <li><b>Approve Resilient Strategy:</b> Formally approve the dual-sourcing strategy with a {sourcing_split}/{100-sourcing_split} volume allocation.</li>
+                    <li><b>Initiate Supplier Onboarding:</b> Immediately assign a cross-functional team (Engineering, Procurement, Quality) to begin the technical qualification and contracting process with <b>{alt_supplier_name}</b>.</li>
+                    <li><b>Secure Bridge Inventory:</b> Authorize procurement to build a 60-day strategic buffer of the primary component to ensure supply continuity during the transition.</li>
+                </ol>
+            </div>
             """, unsafe_allow_html=True)
 else:
     st.info("Configure your sourcing strategy and a geopolitical scenario in the sidebar, then click 'Run Simulation'.")
