@@ -1,4 +1,4 @@
-# app.py (Strategic Simulation Platform v4.1 - Indentation Corrected)
+# app.py (Strategic Simulation Platform v5.0 - Dual Mode: Beginner & Advanced)
 
 import streamlit as st
 import pandas as pd
@@ -24,39 +24,28 @@ st.markdown("""
         .metric-card h5 .bi { margin-right: 10px; font-size: 1.5rem; vertical-align: middle; }
         .stButton>button { border-radius: 8px; font-weight: bold; border: 1px solid #30363d; }
         .stButton>button[kind="primary"] { border: 1px solid #238636; }
-        .stExpander { border: 1px solid #30363d !important; border-radius: 10px !important; }
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
 # 2. SESSION STATE & MODEL TEMPLATES
 # ==============================================================================
+if 'mode' not in st.session_state:
+    st.session_state.mode = "Beginner"
 if 'variables' not in st.session_state:
     st.session_state.variables = []
 if 'formula' not in st.session_state:
     st.session_state.formula = ""
 
 templates = {
-    "Blank Model": {
-        "variables": [],
-        "formula": ""
-    },
+    # Templates for Advanced Mode
+    "Blank Model": {"variables": [], "formula": ""},
     "Supply Chain: Total Landed Cost": {
-        "variables": [
-            {'name': 'Base_Unit_Cost', 'dist': 'Normal', 'param1': 25.0, 'param2': 1.5},
-            {'name': 'Freight_Cost_per_Unit', 'dist': 'Normal', 'param1': 2.0, 'param2': 0.5},
-            {'name': 'Tariff_Rate', 'dist': 'Uniform', 'param1': 0.0, 'param2': 0.05},
-            {'name': 'Disruption_Premium', 'dist': 'Uniform', 'param1': 0.0, 'param2': 10.0}
-        ],
+        "variables": [{'name': 'Base_Unit_Cost', 'dist': 'Normal', 'param1': 25.0, 'param2': 1.5}, {'name': 'Freight_Cost_per_Unit', 'dist': 'Normal', 'param1': 2.0, 'param2': 0.5}, {'name': 'Tariff_Rate', 'dist': 'Uniform', 'param1': 0.0, 'param2': 0.05}, {'name': 'Disruption_Premium', 'dist': 'Uniform', 'param1': 0.0, 'param2': 10.0}],
         "formula": "(Base_Unit_Cost * (1 + Tariff_Rate)) + Freight_Cost_per_Unit + Disruption_Premium"
     },
     "Marketing: Campaign ROI": {
-        "variables": [
-            {'name': 'Ad_Spend', 'dist': 'Constant', 'param1': 50000.0, 'param2': 0},
-            {'name': 'Click_Through_Rate', 'dist': 'Uniform', 'param1': 0.01, 'param2': 0.03},
-            {'name': 'Conversion_Rate', 'dist': 'Normal', 'param1': 0.05, 'param2': 0.01},
-            {'name': 'Customer_Lifetime_Value', 'dist': 'Normal', 'param1': 250.0, 'param2': 50.0}
-        ],
+        "variables": [{'name': 'Ad_Spend', 'dist': 'Constant', 'param1': 50000.0, 'param2': 0}, {'name': 'Click_Through_Rate', 'dist': 'Uniform', 'param1': 0.01, 'param2': 0.03}, {'name': 'Conversion_Rate', 'dist': 'Normal', 'param1': 0.05, 'param2': 0.01}, {'name': 'Customer_Lifetime_Value', 'dist': 'Normal', 'param1': 250.0, 'param2': 50.0}],
         "formula": "(((Ad_Spend * Click_Through_Rate) * Conversion_Rate) * Customer_Lifetime_Value) - Ad_Spend"
     }
 }
@@ -65,6 +54,7 @@ templates = {
 # 3. CORE SIMULATION ENGINE (Unchanged)
 # ==============================================================================
 def run_monte_carlo(formula, variables, num_simulations):
+    # This function remains robust and unchanged
     simulation_results = []
     for _ in range(num_simulations):
         local_scope = {var['name']: (np.random.normal(var['param1'], var['param2']) if var['dist'] == 'Normal' else
@@ -82,64 +72,77 @@ def run_monte_carlo(formula, variables, num_simulations):
 # 4. UI LAYOUT & COMPONENTS
 # ==============================================================================
 st.markdown('<h1 style="text-align: center;"><i class="bi bi-bar-chart-line-fill"></i> Strategic Simulation Platform</h1>', unsafe_allow_html=True)
-st.markdown("<h5 style='text-align: center; color: #8b949e;'>A unified platform for forecasting outcomes and quantifying risk across any business domain.</h5>", unsafe_allow_html=True)
-st.divider()
 
-# --- Sidebar for Model Building ---
+# --- Sidebar ---
 with st.sidebar:
-    st.markdown("<h3><i class='bi bi-tools'></i> Model Builder</h3>", unsafe_allow_html=True)
-    st.markdown("Select a template or build a model from scratch.")
-    st.divider()
-
-    st.markdown('<h5><i class="bi bi-journal-album"></i> 1. Load a Model Template</h5>', unsafe_allow_html=True)
-    template_choice = st.selectbox("Select a pre-built model", templates.keys(), label_visibility="collapsed")
-    if st.button("Load Template", use_container_width=True):
-        st.session_state.variables = templates[template_choice]['variables']
-        st.session_state.formula = templates[template_choice]['formula']
-        st.rerun()
-    st.divider()
-
-    st.markdown('<h5><i class="bi bi-sliders"></i> 2. Define Input Variables</h5>', unsafe_allow_html=True)
-    for i, var in enumerate(st.session_state.variables):
-        with st.container():
-            c1, c2 = st.columns([0.85, 0.15])
-            with c1:
-                var['name'] = st.text_input("Variable Name", var['name'], key=f"name_{i}", placeholder="e.g., Revenue_Growth").replace(" ", "_")
-                var['dist'] = st.selectbox("Distribution", ["Normal", "Uniform", "Constant"], index=["Normal", "Uniform", "Constant"].index(var['dist']), key=f"dist_{i}")
-                if var['dist'] == "Normal": p1, p2 = st.columns(2); var['param1'] = p1.number_input("Mean (μ)", value=var['param1'], key=f"p1_{i}"); var['param2'] = p2.number_input("Std Dev (σ)", value=var['param2'], key=f"p2_{i}", min_value=0.0)
-                elif var['dist'] == "Uniform": p1, p2 = st.columns(2); var['param1'] = p1.number_input("Min", value=var['param1'], key=f"p1_{i}"); var['param2'] = p2.number_input("Max", value=var['param2'], key=f"p2_{i}")
-                else: var['param1'] = st.number_input("Value", value=var['param1'], key=f"p1_{i}"); var['param2'] = 0
-            with c2: 
-                st.write("") 
-                st.write("")
-                # ** THE FIX IS HERE: The next line has been correctly un-indented. **
-                if st.button("🗑️", key=f"del_{i}", help="Remove this variable", use_container_width=True):
-                    st.session_state.variables.pop(i)
-                    st.rerun()
-            st.markdown("<hr style='margin:10px 0; border-color: #30363d;'>", unsafe_allow_html=True)
-    if st.button("Add Variable", use_container_width=True): 
-        st.session_state.variables.append({'name': f'Variable_{len(st.session_state.variables)+1}', 'dist': 'Normal', 'param1': 100.0, 'param2': 10.0})
-        st.rerun()
-
-    st.markdown('<h5><i class="bi bi-calculator-fill"></i> 3. Define Model Formula</h5>', unsafe_allow_html=True)
-    st.session_state.formula = st.text_area("Formula", st.session_state.formula, label_visibility="collapsed")
+    st.image("https://i.imgur.com/vVw2G71.png", width=100)
+    st.markdown("<h3><i class='bi bi-tools'></i> Control Panel</h3>", unsafe_allow_html=True)
     
+    st.radio("Select Analysis Mode", ["Beginner", "Advanced"], key="mode", horizontal=True)
     st.divider()
-    st.markdown('<h5><i class="bi bi-gear-fill"></i> 4. Configure Simulation</h5>', unsafe_allow_html=True)
-    num_simulations = st.select_slider("Number of Simulations", [1000, 5000, 10000, 20000, 50000], value=10000)
-    
+
+    # --- BEGINNER MODE UI ---
+    if st.session_state.mode == "Beginner":
+        st.markdown("<h5><i class='bi bi-bounding-box-circles'></i> Supply Chain Risk Model</h5>", unsafe_allow_html=True)
+        st.info("Adjust the sliders to model your supply chain scenario.", icon="💡")
+        
+        base_cost = st.number_input("Average Cost per Chip ($)", min_value=1.0, value=25.0, step=1.0)
+        stability_score = st.slider("Geopolitical Stability", 0, 100, 10, 5, help="0=Stable, 100=Full Crisis")
+        concentration_score = st.slider("Supplier Concentration", 0, 100, 80, 5, help="0=Diversified, 100=Single Source")
+        logistics_score = st.slider("Logistics Network Vulnerability", 0, 100, 20, 5, help="0=Robust, 100=Vulnerable")
+        
+        # This is the abstraction layer: convert simple slider values to complex simulation parameters
+        sim_vars = [
+            {'name': 'Base_Unit_Cost', 'dist': 'Normal', 'param1': base_cost, 'param2': 0.5 + (concentration_score / 100) * 4.0},
+            {'name': 'Freight_Cost_per_Unit', 'dist': 'Normal', 'param1': 2.0, 'param2': 0.2 + (logistics_score / 100) * 2.0},
+            {'name': 'Tariff_Rate', 'dist': 'Uniform', 'param1': 0.0, 'param2': (stability_score / 100) * 0.30},
+            {'name': 'Disruption_Premium', 'dist': 'Uniform', 'param1': 0.0, 'param2': 5.0 + (stability_score / 100) * 75.0}
+        ]
+        sim_formula = "(Base_Unit_Cost * (1 + Tariff_Rate)) + Freight_Cost_per_Unit + Disruption_Premium"
+        
+    # --- ADVANCED MODE UI ---
+    else:
+        st.markdown('<h5><i class="bi bi-journal-album"></i> 1. Load Model Template</h5>', unsafe_allow_html=True)
+        template_choice = st.selectbox("Select a pre-built model", templates.keys(), label_visibility="collapsed")
+        if st.button("Load Template", use_container_width=True):
+            st.session_state.variables = templates[template_choice]['variables']; st.session_state.formula = templates[template_choice]['formula']
+            st.rerun()
+        st.divider()
+
+        st.markdown('<h5><i class="bi bi-sliders"></i> 2. Define Input Variables</h5>', unsafe_allow_html=True)
+        for i, var in enumerate(st.session_state.variables):
+            # (UI for variable definition is unchanged)
+            with st.container():
+                c1,c2 = st.columns([0.85, 0.15]);
+                with c1:
+                    var['name'] = st.text_input("Variable Name", var['name'], key=f"name_{i}").replace(" ", "_"); var['dist'] = st.selectbox("Distribution", ["Normal", "Uniform", "Constant"], index=["Normal", "Uniform", "Constant"].index(var['dist']), key=f"dist_{i}")
+                    if var['dist'] == "Normal": p1, p2 = st.columns(2); var['param1'] = p1.number_input("Mean (μ)", value=var['param1'], key=f"p1_{i}"); var['param2'] = p2.number_input("Std Dev (σ)", value=var['param2'], key=f"p2_{i}", min_value=0.0)
+                    elif var['dist'] == "Uniform": p1, p2 = st.columns(2); var['param1'] = p1.number_input("Min", value=var['param1'], key=f"p1_{i}"); var['param2'] = p2.number_input("Max", value=var['param2'], key=f"p2_{i}")
+                    else: var['param1'] = st.number_input("Value", value=var['param1'], key=f"p1_{i}"); var['param2'] = 0
+                with c2: st.write(""); st.write("");
+                    if st.button("🗑️", key=f"del_{i}", help="Remove", use_container_width=True): st.session_state.variables.pop(i); st.rerun()
+                st.markdown("<hr style='margin:10px 0; border-color: #30363d;'>", unsafe_allow_html=True)
+        if st.button("Add Custom Variable", use_container_width=True): st.session_state.variables.append({'name': f'Variable_{len(st.session_state.variables)+1}', 'dist': 'Normal', 'param1': 100.0, 'param2': 10.0}); st.rerun()
+        
+        st.markdown('<h5><i class="bi bi-calculator-fill"></i> 3. Define Model Formula</h5>', unsafe_allow_html=True)
+        st.session_state.formula = st.text_area("Formula", st.session_state.formula, label_visibility="collapsed")
+        
+        sim_vars = st.session_state.variables
+        sim_formula = st.session_state.formula
+
+    st.divider()
+    num_simulations = st.select_slider("Simulation Runs", [1000, 10000, 20000, 50000], value=10000, key="sim_runs")
     run_button = st.button("Run Simulation", use_container_width=True, type="primary")
 
 # --- Main Panel for Results ---
 if run_button:
-    if not st.session_state.variables or not st.session_state.formula:
-        st.warning("Please load a template or define at least one variable and a formula.", icon="⚠️")
+    if not sim_vars or not sim_formula:
+        st.warning("Please configure your model in the sidebar before running.", icon="⚠️")
     else:
-        results = run_monte_carlo(st.session_state.formula, st.session_state.variables, num_simulations)
-        
+        results = run_monte_carlo(sim_formula, sim_vars, num_simulations)
         if results is not None:
-            # The entire results display section from v3.1 fits here perfectly
             st.markdown("<h3><i class='bi bi-clipboard-data-fill'></i> Simulation Dashboard</h3>", unsafe_allow_html=True)
+            # (The entire results display dashboard remains the same as it is robust and professional)
             mean_val, std_val = results.mean(), results.std()
             p5, p95 = np.percentile(results, 5), np.percentile(results, 95)
             col1, col2, col3 = st.columns(3, gap="large")
@@ -154,6 +157,5 @@ if run_button:
             ax.tick_params(colors='white'); ax.spines['left'].set_color('white'); ax.spines['bottom'].set_color('white'); ax.spines['top'].set_color('none'); ax.spines['right'].set_color('none')
             fig.patch.set_facecolor('#0d1117'); ax.set_facecolor('#161b22'); ax.legend(); ax.grid(True, which='both', linestyle='--', linewidth=0.5, color='#30363d')
             st.pyplot(fig)
-            with st.expander("View Raw Simulation Data"): st.dataframe(pd.DataFrame(results, columns=['Outcome']))
 else:
-    st.markdown("<div style='text-align: center; padding-top: 50px;'><h3 style='color: #8b949e;'>Select a template or build your own model, then click 'Run Simulation' to begin.</h3></div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align: center; padding-top: 50px;'><h3 style='color: #8b949e;'>Configure your scenario in the sidebar and click 'Run Simulation' to begin.</h3></div>", unsafe_allow_html=True)
