@@ -1,4 +1,4 @@
-# app.py (Definitive Version with Gauge Chart & Full Visual Suite)
+# app.py (Definitive, Corrected & Fully-Featured Version)
 
 import streamlit as st
 import pandas as pd
@@ -11,7 +11,7 @@ from datetime import datetime
 import random
 
 # ==============================================================================
-# 1. PAGE CONFIGURATION & AESTHETIC STYLING
+# 1. PAGE CONFIGURATION & STYLING
 # ==============================================================================
 st.set_page_config(page_title="Strategic Risk Dashboard", page_icon="◈", layout="wide")
 
@@ -62,7 +62,6 @@ EVENT_TEMPLATES = {
     "Korean Peninsula Tensions": {'export_ban_country': 'South Korea', 'export_ban_percent': 40, 'tariff_country': 'South Korea', 'tariff_percent': 15, 'transit_delay': 10, 'supplier_shutdown_prob': 0.3}
 }
 
-# (The core simulation logic remains unchanged and robust)
 def generate_dynamic_strategies(component, primary_supplier, alt_supplier_name, sourcing_split, df):
     strategies = {};
     if primary_supplier.empty: return strategies
@@ -96,19 +95,31 @@ def run_full_simulation(strategy_df, scenario):
         total_cost += cost * sourcing_pct; total_lt += row['Base Lead Time (days)'] * sourcing_pct; total_risk += stockout_risk * sourcing_pct
     return {'Cost': total_cost, 'Lead Time': total_lt, 'Stockout Risk': total_risk * 100}
 
+# --- ROBUST PDF GENERATION (BUG FIX) ---
 def generate_pdf_report(results_df, scenario, component):
     pdf = FPDF(); pdf.add_page(); pdf.set_font('Arial', 'B', 16); pdf.cell(0, 10, f'Strategic Risk Briefing: {component}', 0, 1, 'C'); pdf.ln(5)
     pdf.set_font('Arial', 'B', 12); pdf.cell(0, 10, 'Disruption Scenario Parameters', 0, 1)
     pdf.set_font('Arial', '', 10)
     for key, value in scenario.items(): pdf.multi_cell(0, 5, f'{key.replace("_", " ").title()}: {value}')
     pdf.ln(5); pdf.set_font('Arial', 'B', 12); pdf.cell(0, 10, 'Strategy Impact Analysis', 0, 1)
-    pdf.set_font('Arial', 'B', 10); col_widths = [60, 40, 40, 40];
-    header = ['Strategy'] + list(results_df.columns)
-    for i, h in enumerate(header): pdf.cell(col_widths[i], 7, h, 1, 0, 'C');
+    
+    data_for_pdf = results_df.reset_index().rename(columns={'index': 'Strategy'})
+    header = list(data_for_pdf.columns)
+    num_cols = len(header)
+    page_width = 190
+    col_width = page_width / num_cols
+    col_widths = [col_width] * num_cols
+
+    pdf.set_font('Arial', 'B', 10)
+    for i, h in enumerate(header): pdf.cell(col_widths[i], 7, str(h), 1, 0, 'C');
     pdf.ln()
+    
     pdf.set_font('Arial', '', 10)
-    for index, row in results_df.iterrows():
-        pdf.cell(col_widths[0], 6, str(index), 1); pdf.cell(col_widths[1], 6, f"${row['Cost']:.2f}", 1); pdf.cell(col_widths[2], 6, f"{row['Lead Time']:.0f} days", 1); pdf.cell(col_widths[3], 6, f"{row['Stockout Risk']:.1f}%", 1); pdf.ln()
+    for _, row in data_for_pdf.iterrows():
+        pdf.cell(col_widths[0], 6, str(row['Strategy']), 1)
+        pdf.cell(col_widths[1], 6, f"${row['Cost']:.2f}", 1); pdf.cell(col_widths[2], 6, f"{row['Lead Time']:.0f} days", 1)
+        pdf.cell(col_widths[3], 6, f"{row['Stockout Risk']:.1f}%", 1);
+        pdf.ln()
     return pdf.output(dest='S').encode('latin1')
 
 # ==============================================================================
@@ -120,6 +131,7 @@ with st.sidebar:
     primary_supplier = master_df[(master_df['Component']==selected_component) & master_df['Is Primary']]
     alt_suppliers = master_df[(master_df['Component']==selected_component) & (~master_df['Is Primary'])]
     alt_supplier_name, sourcing_split = (st.selectbox("Alternative Supplier", alt_suppliers['Supplier'].unique()), st.slider("Primary Supplier Sourcing %", 0, 100, 60, 5)) if not alt_suppliers.empty else (None, 100)
+    
     st.divider(); st.subheader("Geopolitical & Market Scenario")
     def on_template_change(): st.session_state.update(EVENT_TEMPLATES[st.session_state.event_template])
     selected_event = st.selectbox("Select Event Template", options=EVENT_TEMPLATES.keys(), key="event_template", on_change=on_template_change, help="Select a pre-configured event to start with.")
@@ -151,7 +163,6 @@ if run_button:
         baseline_kpis = results_df.loc['Baseline']
         resilient_kpis = results_df.loc['Resilient'] if 'Resilient' in results_df.index else baseline_kpis
         
-        # --- High-Impact Gauge & KPI Cards ---
         col1, col2 = st.columns([0.4, 0.6])
         with col1:
             fig_gauge = go.Figure(go.Indicator(
@@ -168,7 +179,6 @@ if run_button:
             kpi_col2.metric("Cost of Resilience", f"{cost_increase_pct:+.1f}%", "vs. Baseline")
             st.markdown("</div>", unsafe_allow_html=True)
 
-        # --- Tabbed Interface for Deep-Dive Analysis ---
         tab1, tab2, tab3, tab4 = st.tabs(["📊 Strategic Overview", "💰 Financial Analysis", "🌪️ Sensitivity Analysis", "📄 Executive Briefing (BCP)"])
 
         with tab1:
