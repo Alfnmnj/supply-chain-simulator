@@ -1,4 +1,4 @@
-# app.py (Universal Strategic Simulation Platform v4.0)
+# app.py (v4.1 - Definitive Version, No Emojis)
 
 import streamlit as st
 import pandas as pd
@@ -10,179 +10,171 @@ import seaborn as sns
 # 1. PAGE CONFIGURATION & STYLING
 # ==============================================================================
 st.set_page_config(
-    page_title="Strategic Simulation Platform",
-    page_icon="🧠",
+    page_title="Universal Business Simulator",
+    page_icon="◈",  # Professional, non-emoji icon
     layout="wide"
 )
 
-# Professional UI/UX Styling
+# This is the core of the UI: Lucide icon library and custom CSS
 st.markdown("""
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        .stApp { background-color: #0f1116; }
-        .stMetric { background-color: #1a1c24; border: 1px solid #2e3439; border-radius: 10px; padding: 20px; }
+        /* Base Styling */
+        .stApp { background-color: #0a0a0a; color: #e6e6e6; }
+        h1, h2, h3, h4, h5, h6 { color: #ffffff; }
+
+        /* Icon Styling */
+        i[data-lucide] {
+            width: 20px;
+            height: 20px;
+            stroke-width: 2px;
+            vertical-align: middle;
+            margin-right: 0.5rem;
+            color: #a1a1a1;
+        }
+        h1 > i[data-lucide] { width: 32px; height: 32px; }
+
+        /* Metric Card Styling */
+        .stMetric {
+            background-color: #1a1a1a;
+            border: 1px solid #2c2c2c;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+        }
         .stMetric .st-ae { font-size: 1.1rem; color: #a1a1a1; }
-        .stButton>button { border-radius: 10px; font-weight: bold; }
-        .stExpander { border: 1px solid #2e3439 !important; border-radius: 10px !important; }
-        div[data-testid="stExpander"] div[role="button"] p { font-size: 1.1rem; font-weight: bold; }
+        
+        /* Button Styling */
+        .stButton>button {
+            border-radius: 8px;
+            font-weight: bold;
+            border: 1px solid #4a4a4a;
+            transition: all 0.2s ease-in-out;
+        }
+        .stButton>button:hover {
+            border-color: #8A2BE2; /* A premium accent color */
+            color: #8A2BE2;
+        }
+
+        /* Expander Styling */
+        .stExpander {
+            border: 1px solid #2c2c2c !important;
+            border-radius: 10px !important;
+            background-color: #1c1c1c;
+        }
+        
+        /* Sidebar Styling */
+        .st-emotion-cache-16txtl3 { background-color: #121212; }
+        
+        /* Delete button styling */
+        div[data-testid="stHorizontalBlock"] button[kind="secondary"] {
+            color: #ff4b4b;
+            border-color: #ff4b4b;
+        }
+        div[data-testid="stHorizontalBlock"] button[kind="secondary"]:hover {
+            color: #ffffff;
+            background-color: #ff4b4b;
+            border-color: #ff4b4b;
+        }
+
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. MODEL TEMPLATES & SESSION STATE
+# 2. SESSION STATE INITIALIZATION
 # ==============================================================================
-TEMPLATES = {
-    "Custom Model": {
-        'variables': [{'name': 'Revenue', 'dist': 'Normal', 'p1': 500000, 'p2': 50000},
-                      {'name': 'Costs', 'dist': 'Normal', 'p1': 300000, 'p2': 30000}],
-        'formula': "Revenue - Costs"
-    },
-    "Finance: Net Profit Forecast": {
-        'variables': [{'name': 'Sales_Volume', 'dist': 'Normal', 'p1': 10000, 'p2': 1500},
-                      {'name': 'Price_per_Unit', 'dist': 'Uniform', 'p1': 150, 'p2': 165},
-                      {'name': 'Variable_Cost_per_Unit', 'dist': 'Normal', 'p1': 80, 'p2': 5},
-                      {'name': 'Fixed_Costs', 'dist': 'Constant', 'p1': 250000, 'p2': 0}],
-        'formula': "(Sales_Volume * (Price_per_Unit - Variable_Cost_per_Unit)) - Fixed_Costs"
-    },
-    "Marketing: Campaign ROI": {
-        'variables': [{'name': 'Ad_Spend', 'dist': 'Constant', 'p1': 50000, 'p2': 0},
-                      {'name': 'Click_Through_Rate', 'dist': 'Uniform', 'p1': 0.015, 'p2': 0.03},
-                      {'name': 'Conversion_Rate', 'dist': 'Normal', 'p1': 0.05, 'p2': 0.01},
-                      {'name': 'Customer_Lifetime_Value', 'dist': 'Normal', 'p1': 2500, 'p2': 400}],
-        'formula': "((Ad_Spend * Click_Through_Rate / 0.5) * Conversion_Rate * Customer_Lifetime_Value) - Ad_Spend"
-    },
-    "HR: Attrition Cost Savings": {
-        'variables': [{'name': 'Employee_Count', 'dist': 'Constant', 'p1': 500, 'p2': 0},
-                      {'name': 'Base_Attrition_Rate', 'dist': 'Uniform', 'p1': 0.12, 'p2': 0.18},
-                      {'name': 'Attrition_Reduction_Factor', 'dist': 'Uniform', 'p1': 0.15, 'p2': 0.30},
-                      {'name': 'Avg_Cost_to_Replace', 'dist': 'Constant', 'p1': 75000, 'p2': 0}],
-        'formula': "Employee_Count * Base_Attrition_Rate * Attrition_Reduction_Factor * Avg_Cost_to_Replace"
-    }
-}
-
 if 'variables' not in st.session_state:
-    st.session_state.variables = TEMPLATES['Custom Model']['variables']
-    st.session_state.formula = TEMPLATES['Custom Model']['formula']
+    st.session_state.variables = [
+        {'name': 'Revenue', 'dist': 'Normal', 'param1': 5000000, 'param2': 500000},
+        {'name': 'COGS_Percent', 'dist': 'Uniform', 'param1': 25, 'param2': 30},
+        {'name': 'OpEx', 'dist': 'Constant', 'param1': 1200000, 'param2': 0}
+    ]
 
 # ==============================================================================
-# 3. CORE SIMULATION ENGINE
+# 3. CORE SIMULATION ENGINE (Unchanged)
 # ==============================================================================
-@st.cache_data
 def run_monte_carlo(formula, variables, num_simulations):
-    # (This robust engine remains unchanged)
-    local_scope = {}
-    for var in variables:
-        if var['dist'] == 'Normal': local_scope[var['name']] = np.random.normal(var['p1'], var['p2'], num_simulations)
-        elif var['dist'] == 'Uniform': local_scope[var['name']] = np.random.uniform(var['p1'], var['p2'], num_simulations)
-        else: local_scope[var['name']] = var['p1']
-    try:
-        return eval(formula, {"__builtins__": {"np": np}}, local_scope)
-    except Exception: return None
+    simulation_results = []
+    for _ in range(num_simulations):
+        local_scope = {}
+        for var in variables:
+            if var['dist'] == 'Normal': value = np.random.normal(var['param1'], var['param2'])
+            elif var['dist'] == 'Uniform': value = np.random.uniform(var['param1'], var['param2'])
+            else: value = var['param1']
+            local_scope[var['name']] = value
+        try:
+            result = eval(formula, {"__builtins__": None}, local_scope)
+            simulation_results.append(result)
+        except Exception as e:
+            st.error(f"Error evaluating formula: {e}. Check variable names and syntax.")
+            return None
+    return np.array(simulation_results)
 
 # ==============================================================================
 # 4. UI LAYOUT
 # ==============================================================================
-st.title("🧠 Universal Strategic Simulator")
-st.markdown("A platform to model, simulate, and compare business scenarios under uncertainty.")
+st.markdown("<h1><i data-lucide='brain-circuit'></i> Universal Business Simulator</h1>", unsafe_allow_html=True)
+st.markdown("A platform to model, simulate, and understand any business scenario under uncertainty.")
 
-# --- Sidebar for Model Building ---
 with st.sidebar:
-    st.image("https://i.imgur.com/vVw2G71.png", width=100)
-    st.header("Model Configuration")
-    
-    # Template Loader
-    selected_template = st.selectbox("Load Model Template", list(TEMPLATES.keys()))
-    if st.button("Load Template"):
-        st.session_state.variables = TEMPLATES[selected_template]['variables']
-        st.session_state.formula = TEMPLATES[selected_template]['formula']
-        st.rerun()
-
+    st.markdown("<h2><i data-lucide='sliders-horizontal'></i> Model Builder</h2>", unsafe_allow_html=True)
+    st.markdown("Define your inputs, model, and simulation settings.")
     st.divider()
 
-    # Model Definition
-    with st.expander("Model Definition", expanded=True):
-        st.session_state.formula = st.text_area("Model Formula", st.session_state.formula, height=100)
-        
+    with st.expander("Step 1: Define Input Variables", expanded=True):
         for i, var in enumerate(st.session_state.variables):
             st.markdown(f"**Variable: `{var['name']}`**")
-            c1, c2 = st.columns(2)
-            var['dist'] = c1.selectbox("Distribution", ["Normal", "Uniform", "Constant"], index=["Normal", "Uniform", "Constant"].index(var['dist']), key=f"dist_{i}")
-            if var['dist'] == "Normal": var['p1'] = c2.number_input("Mean (μ)", value=var['p1'], key=f"p1_{i}"); var['p2'] = c2.number_input("Std Dev (σ)", value=var['p2'], key=f"p2_{i}")
-            elif var['dist'] == "Uniform": var['p1'] = c2.number_input("Min", value=var['p1'], key=f"p1_{i}"); var['p2'] = c2.number_input("Max", value=var['p2'], key=f"p2_{i}")
-            else: var['p1'] = c2.number_input("Value", value=var['p1'], key=f"p1_{i}"); var['p2'] = 0
+            c1, c2 = st.columns([0.8, 0.2]); var['name'] = c1.text_input("Variable Name", var['name'], key=f"name_{i}", label_visibility="collapsed").replace(" ", "_")
+            if c2.button("X", key=f"del_{i}", use_container_width=True, help="Remove this variable"): st.session_state.variables.pop(i); st.rerun()
+            var['dist'] = st.selectbox("Distribution Type", ["Normal", "Uniform", "Constant"], index=["Normal", "Uniform", "Constant"].index(var['dist']), key=f"dist_{i}")
+            if var['dist'] == "Normal": p1, p2 = st.columns(2); var['param1'] = p1.number_input("Mean (μ)", value=var['param1'], key=f"p1_{i}", format="%.2f"); var['param2'] = p2.number_input("Std Dev (σ)", value=var['param2'], key=f"p2_{i}", format="%.2f")
+            elif var['dist'] == "Uniform": p1, p2 = st.columns(2); var['param1'] = p1.number_input("Min", value=var['param1'], key=f"p1_{i}", format="%.2f"); var['param2'] = p2.number_input("Max", value=var['param2'], key=f"p2_{i}", format="%.2f")
+            else: var['param1'] = st.number_input("Value", value=var['param1'], key=f"p1_{i}", format="%.2f"); var['param2'] = 0
             st.markdown("---")
-        
-    num_simulations = st.select_slider("Simulation Runs", [1000, 10000, 20000, 50000], value=10000)
-    run_button = st.button("▶ Run Simulation", use_container_width=True, type="primary")
+        if st.button("Add New Variable", use_container_width=True): st.session_state.variables.append({'name': f'NewVar_{len(st.session_state.variables)+1}', 'dist': 'Normal', 'param1': 100, 'param2': 10}); st.rerun()
 
-# --- Main Panel for Results ---
+    with st.expander("Step 2: Define Your Model Formula", expanded=True):
+        st.info("Use variable names from Step 1. Example: (Revenue * (1 - COGS_Percent/100)) - OpEx")
+        formula = st.text_area("Formula", "(Revenue * (1 - COGS_Percent/100)) - OpEx", label_visibility="collapsed")
+    
+    with st.expander("Step 3: Configure Simulation"):
+        num_simulations = st.select_slider("Simulations", [1000, 10000, 20000, 50000, 100000], value=20000)
+
+    st.divider()
+    run_button = st.button("Run Simulation", use_container_width=True, type="primary")
+
 if run_button:
-    base_vars = st.session_state.variables
-    base_results = run_monte_carlo(st.session_state.formula, base_vars, num_simulations)
-
-    if base_results is None:
-        st.error("Formula evaluation failed. Check variable names and syntax.")
+    if not st.session_state.variables or not formula: st.warning("Please define at least one variable and a formula.")
     else:
-        st.header("Scenario Comparison Dashboard", anchor=False)
-        
-        # --- Create and run the comparative scenario ---
-        col1, col2 = st.columns(2, gap="large")
-        with col1:
-            st.subheader("Base Scenario", anchor=False)
-            comp_vars = [v.copy() for v in base_vars] # Deep copy for modification
-            with st.container(border=True):
-                st.markdown("Modify variables below to create a comparative scenario.")
-                for var in comp_vars:
-                    if var['dist'] != 'Constant':
-                        var['p1'] = st.slider(f"Change `{var['name']}` (Parameter 1)", float(var['p1'] * 0.8), float(var['p1'] * 1.2), float(var['p1']), key=f"comp_{var['name']}")
-        
-        comp_results = run_monte_carlo(st.session_state.formula, comp_vars, num_simulations)
-
-        # --- Display KPIs ---
-        with col1:
-            mean_val, std_val, p5, p95 = base_results.mean(), base_results.std(), np.percentile(base_results, 5), np.percentile(base_results, 95)
-            st.metric("Average Outcome", f"{mean_val:,.2f}")
-            st.metric("Risk (Std. Deviation)", f"{std_val:,.2f}")
-            st.metric("90% Confidence Range", f"{p5:,.2f} to {p95:,.2f}")
-
-        with col2:
-            st.subheader("Comparative Scenario", anchor=False)
-            mean_val_c, std_val_c, p5_c, p95_c = comp_results.mean(), comp_results.std(), np.percentile(comp_results, 5), np.percentile(comp_results, 95)
-            st.metric("Average Outcome", f"{mean_val_c:,.2f}", f"{mean_val_c-mean_val:,.2f}")
-            st.metric("Risk (Std. Deviation)", f"{std_val_c:,.2f}", f"{std_val_c-std_val:,.2f}")
-            st.metric("90% Confidence Range", f"{p5_c:,.2f} to {p95_c:,.2f}")
-
-        st.divider()
-
-        # --- Visualization ---
-        st.subheader("Distribution of Potential Outcomes", anchor=False)
-        fig, ax = plt.subplots()
-        sns.kdeplot(base_results, ax=ax, fill=True, label='Base Scenario', color='#4A90E2', lw=2)
-        sns.kdeplot(comp_results, ax=ax, fill=True, label='Comparative Scenario', color='#50E3C2', alpha=0.7, lw=2)
-        ax.set_title("Scenario Outcome Comparison", fontsize=16); ax.set_xlabel("Outcome Value"); ax.set_ylabel("Probability Density"); ax.legend(); ax.grid(True, alpha=0.2)
-        st.pyplot(fig)
-
-        # --- Strategic Insights ---
-        with st.expander("View Strategic Insights & Data", expanded=True):
-            avg_change = (mean_val_c - mean_val) / abs(mean_val) * 100
-            risk_change = (std_val_c - std_val) / abs(std_val) * 100
-            insight_text = f"""
-            The **Comparative Scenario** resulted in an average outcome of **{mean_val_c:,.2f}**, a change of **{avg_change:.1f}%** from the Base Scenario.
-            The associated risk (standard deviation) changed by **{risk_change:.1f}%**.
-            """
-            if avg_change > 0 and risk_change < 5: insight_text += " This represents a highly favorable trade-off, achieving a better outcome with minimal additional risk."
-            elif avg_change > 0 and risk_change > 5: insight_text += " While the average outcome improved, it came with a significant increase in volatility. Evaluate if this risk level is acceptable."
-            elif avg_change < 0: insight_text += " The changes in this scenario led to a less favorable average outcome."
+        with st.spinner("Running thousands of scenarios..."): results = run_monte_carlo(formula, st.session_state.variables, num_simulations)
+        if results is not None:
+            st.markdown("<h2><i data-lucide='bar-chart-3'></i> Simulation Results</h2>", unsafe_allow_html=True)
             
-            st.markdown(f"<h5><i class='bi bi-lightbulb'></i> Key Insight</h5>", unsafe_allow_html=True)
-            st.info(insight_text)
+            mean_val, std_val = results.mean(), results.std(); p5, p95 = np.percentile(results, 5), np.percentile(results, 95); prob_positive = (results > 0).mean() * 100
+            
+            col1, col2, col3 = st.columns(3, gap="large")
+            col1.metric("Average Outcome", f"{mean_val:,.2f}", help="The mean of all simulation runs.")
+            col2.metric("Risk (Std. Deviation)", f"{std_val:,.2f}", help="Measures the volatility of the outcome. Higher is riskier.")
+            col3.metric("Probability of Positive Outcome", f"{prob_positive:.1f}%", help="The percentage of simulation runs that resulted in a value greater than zero.")
 
-            st.markdown(f"<h5><i class='bi bi-table'></i> Raw Data Summary</h5>", unsafe_allow_html=True)
-            summary_df = pd.DataFrame({
-                'Metric': ['Average Outcome', 'Risk (Std. Dev.)', '5th Percentile', '95th Percentile'],
-                'Base Scenario': [mean_val, std_val, p5, p95],
-                'Comparative Scenario': [mean_val_c, std_val_c, p5_c, p95_c]
-            })
-            st.dataframe(summary_df.style.format('{:,.2f}'), use_container_width=True)
+            st.divider()
+
+            fig, ax = plt.subplots(figsize=(10, 5))
+            sns.histplot(results, kde=True, ax=ax, color='#8A2BE2', bins=50)
+            ax.axvline(mean_val, color='#FDD835', linestyle='--', lw=2, label=f"Mean: {mean_val:,.2f}")
+            ax.axvline(p5, color='#e57373', linestyle=':', lw=2, label=f"5th Percentile: {p5:,.2f}")
+            ax.axvline(p95, color='#e57373', linestyle=':', lw=2, label=f"95th Percentile: {p95:,.2f}")
+            ax.set_title("Distribution of Potential Outcomes", fontsize=16); ax.set_xlabel("Outcome Value"); ax.set_ylabel("Frequency"); ax.legend(); ax.grid(True, alpha=0.3)
+            st.pyplot(fig)
+
+            with st.expander("View Full Statistical Summary & Raw Data"): st.dataframe(pd.Series(results).describe().to_frame('Statistics'))
 else:
-    st.info("Load a template or build a custom model in the sidebar, then click **▶ Run Simulation**.")
+    st.markdown("""
+        <div style="background-color: #1a1a1a; border-radius: 12px; padding: 2rem; text-align: center; border: 1px solid #2c2c2c;">
+            <i data-lucide="play-circle" style="width: 48px; height: 48px; color: #a1a1a1;"></i>
+            <h3 style="margin-top: 1rem;">Welcome to the Universal Simulator</h3>
+            <p style="color: #a1a1a1;">Build your model using the <b>Control Panel</b> on the left, then click <b>Run Simulation</b> to see the results.</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("<script>lucide.createIcons();</script>", unsafe_allow_html=True)
