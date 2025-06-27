@@ -1,4 +1,4 @@
-# app.py (Strategic Simulation Platform v5.0 - Dual Mode: Beginner & Advanced)
+# app.py (Strategic Simulation Platform v5.1 - Indentation Corrected & Final)
 
 import streamlit as st
 import pandas as pd
@@ -38,7 +38,6 @@ if 'formula' not in st.session_state:
     st.session_state.formula = ""
 
 templates = {
-    # Templates for Advanced Mode
     "Blank Model": {"variables": [], "formula": ""},
     "Supply Chain: Total Landed Cost": {
         "variables": [{'name': 'Base_Unit_Cost', 'dist': 'Normal', 'param1': 25.0, 'param2': 1.5}, {'name': 'Freight_Cost_per_Unit', 'dist': 'Normal', 'param1': 2.0, 'param2': 0.5}, {'name': 'Tariff_Rate', 'dist': 'Uniform', 'param1': 0.0, 'param2': 0.05}, {'name': 'Disruption_Premium', 'dist': 'Uniform', 'param1': 0.0, 'param2': 10.0}],
@@ -54,7 +53,6 @@ templates = {
 # 3. CORE SIMULATION ENGINE (Unchanged)
 # ==============================================================================
 def run_monte_carlo(formula, variables, num_simulations):
-    # This function remains robust and unchanged
     simulation_results = []
     for _ in range(num_simulations):
         local_scope = {var['name']: (np.random.normal(var['param1'], var['param2']) if var['dist'] == 'Normal' else
@@ -73,25 +71,20 @@ def run_monte_carlo(formula, variables, num_simulations):
 # ==============================================================================
 st.markdown('<h1 style="text-align: center;"><i class="bi bi-bar-chart-line-fill"></i> Strategic Simulation Platform</h1>', unsafe_allow_html=True)
 
-# --- Sidebar ---
 with st.sidebar:
     st.image("https://i.imgur.com/vVw2G71.png", width=100)
     st.markdown("<h3><i class='bi bi-tools'></i> Control Panel</h3>", unsafe_allow_html=True)
-    
     st.radio("Select Analysis Mode", ["Beginner", "Advanced"], key="mode", horizontal=True)
     st.divider()
 
-    # --- BEGINNER MODE UI ---
     if st.session_state.mode == "Beginner":
         st.markdown("<h5><i class='bi bi-bounding-box-circles'></i> Supply Chain Risk Model</h5>", unsafe_allow_html=True)
         st.info("Adjust the sliders to model your supply chain scenario.", icon="💡")
-        
         base_cost = st.number_input("Average Cost per Chip ($)", min_value=1.0, value=25.0, step=1.0)
         stability_score = st.slider("Geopolitical Stability", 0, 100, 10, 5, help="0=Stable, 100=Full Crisis")
         concentration_score = st.slider("Supplier Concentration", 0, 100, 80, 5, help="0=Diversified, 100=Single Source")
         logistics_score = st.slider("Logistics Network Vulnerability", 0, 100, 20, 5, help="0=Robust, 100=Vulnerable")
         
-        # This is the abstraction layer: convert simple slider values to complex simulation parameters
         sim_vars = [
             {'name': 'Base_Unit_Cost', 'dist': 'Normal', 'param1': base_cost, 'param2': 0.5 + (concentration_score / 100) * 4.0},
             {'name': 'Freight_Cost_per_Unit', 'dist': 'Normal', 'param1': 2.0, 'param2': 0.2 + (logistics_score / 100) * 2.0},
@@ -100,8 +93,7 @@ with st.sidebar:
         ]
         sim_formula = "(Base_Unit_Cost * (1 + Tariff_Rate)) + Freight_Cost_per_Unit + Disruption_Premium"
         
-    # --- ADVANCED MODE UI ---
-    else:
+    else: # Advanced Mode
         st.markdown('<h5><i class="bi bi-journal-album"></i> 1. Load Model Template</h5>', unsafe_allow_html=True)
         template_choice = st.selectbox("Select a pre-built model", templates.keys(), label_visibility="collapsed")
         if st.button("Load Template", use_container_width=True):
@@ -111,18 +103,24 @@ with st.sidebar:
 
         st.markdown('<h5><i class="bi bi-sliders"></i> 2. Define Input Variables</h5>', unsafe_allow_html=True)
         for i, var in enumerate(st.session_state.variables):
-            # (UI for variable definition is unchanged)
             with st.container():
-                c1,c2 = st.columns([0.85, 0.15]);
+                c1,c2 = st.columns([0.85, 0.15])
                 with c1:
                     var['name'] = st.text_input("Variable Name", var['name'], key=f"name_{i}").replace(" ", "_"); var['dist'] = st.selectbox("Distribution", ["Normal", "Uniform", "Constant"], index=["Normal", "Uniform", "Constant"].index(var['dist']), key=f"dist_{i}")
                     if var['dist'] == "Normal": p1, p2 = st.columns(2); var['param1'] = p1.number_input("Mean (μ)", value=var['param1'], key=f"p1_{i}"); var['param2'] = p2.number_input("Std Dev (σ)", value=var['param2'], key=f"p2_{i}", min_value=0.0)
-                    elif var['dist'] == "Uniform": p1, p2 = st.columns(2); var['param1'] = p1.number_input("Min", value=var['param1'], key=f"p1_{i}"); var['param2'] = p2.number_input("Max", value=var['param2'], key=f"p2_{i}")
+                    elif var['dist'] == "Uniform": p1, p2 = st.columns(2); var['param1'] = p1.number_input("Min", value=var['param1'], key=f"p1_{i}"); var['param2'] = p2.number_input("Max", valuevar['param2'], key=f"p2_{i}")
                     else: var['param1'] = st.number_input("Value", value=var['param1'], key=f"p1_{i}"); var['param2'] = 0
-                with c2: st.write(""); st.write("");
-                    if st.button("🗑️", key=f"del_{i}", help="Remove", use_container_width=True): st.session_state.variables.pop(i); st.rerun()
+                with c2: 
+                    st.write("")
+                    st.write("")
+                    # ** THE FIX IS HERE: This line is now correctly aligned. **
+                    if st.button("🗑️", key=f"del_{i}", help="Remove", use_container_width=True):
+                        st.session_state.variables.pop(i)
+                        st.rerun()
                 st.markdown("<hr style='margin:10px 0; border-color: #30363d;'>", unsafe_allow_html=True)
-        if st.button("Add Custom Variable", use_container_width=True): st.session_state.variables.append({'name': f'Variable_{len(st.session_state.variables)+1}', 'dist': 'Normal', 'param1': 100.0, 'param2': 10.0}); st.rerun()
+        if st.button("Add Custom Variable", use_container_width=True): 
+            st.session_state.variables.append({'name': f'Variable_{len(st.session_state.variables)+1}', 'dist': 'Normal', 'param1': 100.0, 'param2': 10.0})
+            st.rerun()
         
         st.markdown('<h5><i class="bi bi-calculator-fill"></i> 3. Define Model Formula</h5>', unsafe_allow_html=True)
         st.session_state.formula = st.text_area("Formula", st.session_state.formula, label_visibility="collapsed")
@@ -134,7 +132,6 @@ with st.sidebar:
     num_simulations = st.select_slider("Simulation Runs", [1000, 10000, 20000, 50000], value=10000, key="sim_runs")
     run_button = st.button("Run Simulation", use_container_width=True, type="primary")
 
-# --- Main Panel for Results ---
 if run_button:
     if not sim_vars or not sim_formula:
         st.warning("Please configure your model in the sidebar before running.", icon="⚠️")
@@ -142,7 +139,6 @@ if run_button:
         results = run_monte_carlo(sim_formula, sim_vars, num_simulations)
         if results is not None:
             st.markdown("<h3><i class='bi bi-clipboard-data-fill'></i> Simulation Dashboard</h3>", unsafe_allow_html=True)
-            # (The entire results display dashboard remains the same as it is robust and professional)
             mean_val, std_val = results.mean(), results.std()
             p5, p95 = np.percentile(results, 5), np.percentile(results, 95)
             col1, col2, col3 = st.columns(3, gap="large")
