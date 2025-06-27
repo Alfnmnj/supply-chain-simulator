@@ -1,4 +1,4 @@
-# app.py
+# app.py (Industry-Grade Version 2.0)
 
 import streamlit as st
 import pandas as pd
@@ -8,188 +8,222 @@ import seaborn as sns
 import random
 
 # ==============================================================================
-# Main App Configuration
+# 1. PAGE CONFIGURATION & STYLING
 # ==============================================================================
 st.set_page_config(
-    page_title="Supply Chain Risk Simulator",
-    page_icon="⛓️",
+    page_title="Supply Chain Resilience Simulator",
+    page_icon="🛡️",
     layout="wide"
 )
 
-st.title("⛓️ Geopolitical Supply Chain Risk Simulator")
-st.markdown("This tool simulates the impact of geopolitical disruptions on a critical component's cost, lead time, and stockout risk.")
+# Inject custom CSS for professional UI/UX
+st.markdown("""
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        /* General styling */
+        .stApp {
+            background-color: #0f1116; /* Dark background for the main app */
+        }
+        /* Style for KPI Metric Cards */
+        .stMetric {
+            background-color: #1a1c24; /* A slightly lighter dark shade */
+            border: 1px solid #2e3439;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+        }
+        .stMetric .st-ae { /* Target the label text */
+            font-size: 1.1rem;
+            color: #a1a1a1;
+        }
+        /* Style for the main button */
+        .stButton>button {
+            border-radius: 10px;
+            font-weight: bold;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 # ==============================================================================
-# Data Loading and Caching (Use @st.cache_data to speed up the app)
+# 2. DATA LOADING & CACHING
 # ==============================================================================
 @st.cache_data
 def load_data():
-    # Supplier Data
-    supplier_data = {
-        'Component': ['Mainboard chipset'], 'Supplier(s)': ['TSMC'], 'Country': ['Taiwan'],
-        'Unit Cost ($)': [25.00], 'Avg_Lead_Time': [75]
+    master_data = {
+        'Component': ['High-end CPU die', 'Mainboard chipset', 'Mainboard chipset', 'Mainboard chipset', 'FPGA (Stratix-class)', 'FPGA (Stratix-class)', 'Power management IC (PMIC)', 'Power management IC (PMIC)'],
+        'Supplier': ['Intel Fab (own)', 'TSMC', 'Intel Fab (Ohio)', 'Si-Bharat Fab', 'Intel Foundry', 'Samsung', 'GlobalFoundries', 'ASE'],
+        'Country': ['USA', 'Taiwan', 'USA', 'India', 'USA', 'South Korea', 'USA', 'Malaysia'],
+        'Unit Cost ($)': [150.00, 25.00, 32.00, 27.50, 120.00, 115.00, 8.00, 7.50],
+        'Avg Lead Time (days)': [90, 75, 50, 60, 112, 120, 130, 145],
+        'Primary Supplier': [True, True, False, False, True, False, True, False]
     }
-    df_supplier = pd.DataFrame(supplier_data)
-    
-    # Stockout Inputs
-    stockout_inputs = {
-        'Safety stock days': {'baseline': 30},
-        'Lead time distribution': {'std': 15},
-        'Forecast error (σ/μ)': {'volatile': 0.35}
-    }
-    return df_supplier, stockout_inputs
+    df = pd.DataFrame(master_data)
+    stockout_inputs = {'Safety stock days': {'baseline': 30},'Lead time distribution': {'std': 15},'Forecast error (σ/μ)': {'volatile': 0.35}}
+    return df, stockout_inputs
 
-df_supplier, stockout_inputs = load_data()
-
+master_df, stockout_inputs = load_data()
 
 # ==============================================================================
-# Define Sourcing Strategies
+# 3. CORE LOGIC (STRATEGY GENERATION & SIMULATION ENGINE)
 # ==============================================================================
-def get_strategies():
-    baseline_strategy_df = df_supplier.copy()
-    baseline_strategy_df['Strategy'] = 'Baseline (Single Source)'
-    baseline_strategy_df['Sourcing %'] = 100.0
+def generate_strategies(selected_component, df):
+    strategies = {}
+    component_suppliers = df[df['Component'] == selected_component]
+    primary_supplier = component_suppliers[component_suppliers['Primary Supplier']].copy()
+    primary_supplier['Sourcing %'] = 100.0
+    strategies['Baseline (Single Source)'] = primary_supplier
 
-    resilient_strategy_df = baseline_strategy_df.copy()
-    resilient_strategy_df['Strategy'] = 'Resilient (Dual Source)'
-    resilient_strategy_df['Sourcing %'] = 60.0
+    secondary_supplier = component_suppliers[(~component_suppliers['Primary Supplier']) & (component_suppliers['Country'] != 'India')].head(1)
+    if not secondary_supplier.empty:
+        dual_source_df = pd.concat([primary_supplier, secondary_supplier])
+        dual_source_df['Sourcing %'] = [60.0, 40.0]
+        strategies['Dual-Source (Global)'] = dual_source_df
 
-    new_supplier = {
-        'Component': 'Mainboard chipset', 'Supplier(s)': 'Intel Fab (Ohio)', 'Country': 'USA',
-        'Unit Cost ($)': 32.00, 'Avg_Lead_Time': 50,
-        'Strategy': 'Resilient (Dual Source)', 'Sourcing %': 40.0
-    }
-    resilient_strategy_df = pd.concat([resilient_strategy_df, pd.DataFrame([new_supplier])], ignore_index=True)
-    return baseline_strategy_df, resilient_strategy_df
+    indian_supplier = component_suppliers[component_suppliers['Country'] == 'India'].head(1)
+    if not indian_supplier.empty:
+        onshore_df = pd.concat([primary_supplier, indian_supplier])
+        onshore_df['Sourcing %'] = [50.0, 50.0]
+        strategies['Onshore (Indo-Global Mix)'] = onshore_df
+    return strategies
 
-baseline_strategy_df, resilient_strategy_df = get_strategies()
-
-
-# ==============================================================================
-# Simulation Engine (NO CHANGES NEEDED HERE)
-# ==============================================================================
 @st.cache_data
-def monte_carlo_stockout_simulation(
-    avg_lead_time, std_dev_lead_time, 
-    logistics_delay_days, supply_cut_prob,
-    sim_days=365, num_simulations=1000):
-    
-    avg_daily_demand = 1000
-    forecast_error = stockout_inputs['Forecast error (σ/μ)']['volatile']
-    std_dev_demand = avg_daily_demand * forecast_error
-    safety_stock = avg_daily_demand * stockout_inputs['Safety stock days']['baseline']
-    reorder_point = (avg_daily_demand * avg_lead_time) + safety_stock
-    all_sim_service_levels = []
-
-    for _ in range(num_simulations):
-        inventory, stockout_days, order_placed = reorder_point, 0, False
-        order_pipeline = {}
-        for day in range(1, sim_days + 1):
-            if day in order_pipeline:
-                inventory += order_pipeline.pop(day)
-                order_placed = False
+def monte_carlo_stockout_simulation(avg_lead_time, std_dev_lead_time, logistics_delay_days, supply_cut_prob):
+    # (The robust Monte Carlo engine remains unchanged)
+    avg_daily_demand = 1000; forecast_error = stockout_inputs['Forecast error (σ/μ)']['volatile']
+    std_dev_demand = avg_daily_demand * forecast_error; safety_stock = avg_daily_demand * stockout_inputs['Safety stock days']['baseline']
+    reorder_point = (avg_daily_demand * avg_lead_time) + safety_stock; all_sim_service_levels = []
+    for _ in range(1000):
+        inventory, stockout_days, order_placed = reorder_point, 0, False; order_pipeline = {}
+        for day in range(1, 365 + 1):
+            if day in order_pipeline: inventory += order_pipeline.pop(day); order_placed = False
             demand = max(0, np.random.normal(avg_daily_demand, std_dev_demand))
-            if inventory >= demand:
-                inventory -= demand
-            else:
-                inventory, stockout_days = 0, stockout_days + 1
+            if inventory >= demand: inventory -= demand
+            else: inventory, stockout_days = 0, stockout_days + 1
             if inventory <= reorder_point and not order_placed:
                 if random.random() > supply_cut_prob:
                     disrupted_lead_time = int(np.random.normal(avg_lead_time, std_dev_lead_time) + logistics_delay_days)
-                    arrival_day = day + max(1, disrupted_lead_time)
-                    order_pipeline[arrival_day] = reorder_point
-                    order_placed = True
-        all_sim_service_levels.append((sim_days - stockout_days) / sim_days)
+                    arrival_day = day + max(1, disrupted_lead_time); order_pipeline[arrival_day] = reorder_point; order_placed = True
+        all_sim_service_levels.append((365 - stockout_days) / 365)
     return np.mean(all_sim_service_levels)
-
 
 def run_full_simulation(strategy_df, scenario):
     results = []
     for _, supplier in strategy_df.iterrows():
-        base_cost, base_avg_lead_time = supplier['Unit Cost ($)'], supplier['Avg_Lead_Time']
+        base_cost, base_avg_lead_time = supplier['Unit Cost ($)'], supplier['Avg Lead Time (days)']
         impacted_cost, logistics_delay, supply_cut = base_cost, 0, 0.0
         if supplier['Country'] == scenario['country']:
-            impacted_cost *= (1 + scenario['tariff_increase'])
-            logistics_delay, supply_cut = scenario['logistics_delay'], scenario['supply_cut']
-        
-        service_level = monte_carlo_stockout_simulation(
-            avg_lead_time=base_avg_lead_time, std_dev_lead_time=stockout_inputs['Lead time distribution']['std'],
-            logistics_delay_days=logistics_delay, supply_cut_prob=supply_cut
-        )
-        results.append({
-            'Supplier': supplier['Supplier(s)'], 'Sourcing %': supplier['Sourcing %'],
-            'Total Landed Cost ($)': impacted_cost, 'Total Lead Time (days)': base_avg_lead_time + logistics_delay,
-            'Stockout Risk (%)': (1 - service_level) * 100
-        })
+            impacted_cost *= (1 + scenario['tariff_increase']); logistics_delay, supply_cut = scenario['logistics_delay'], scenario['supply_cut']
+        service_level = monte_carlo_stockout_simulation(base_avg_lead_time, stockout_inputs['Lead time distribution']['std'], logistics_delay, supply_cut)
+        results.append({'Supplier': supplier['Supplier'], 'Country': supplier['Country'], 'Sourcing %': supplier['Sourcing %'], 'Final Cost ($)': impacted_cost, 'Final Lead Time (days)': base_avg_lead_time + logistics_delay, 'Stockout Risk (%)': (1 - service_level) * 100})
     df_results = pd.DataFrame(results)
-    return {
-        'Strategy': strategy_df['Strategy'].iloc[0],
-        'Weighted Avg Cost ($)': np.average(df_results['Total Landed Cost ($)'], weights=df_results['Sourcing %']),
-        'Weighted Avg Lead Time (days)': np.average(df_results['Total Lead Time (days)'], weights=df_results['Sourcing %']),
-        'Weighted Avg Stockout Risk (%)': np.average(df_results['Stockout Risk (%)'], weights=df_results['Sourcing %'])
-    }
+    summary = {'Strategy': strategy_df.name, 'Weighted Avg Cost ($)': np.average(df_results['Final Cost ($)'], weights=df_results['Sourcing %']), 'Weighted Avg Lead Time (days)': np.average(df_results['Final Lead Time (days)'], weights=df_results['Sourcing %']), 'Weighted Avg Stockout Risk (%)': np.average(df_results['Stockout Risk (%)'], weights=df_results['Sourcing %'])}
+    return summary, df_results
 
 # ==============================================================================
-# Sidebar for User Inputs
+# 4. APPLICATION UI LAYOUT
 # ==============================================================================
-st.sidebar.header("Disruption Scenario Inputs")
-scenario_name = st.sidebar.text_input("Scenario Name", "Taiwan Geopolitical Crisis")
-country_to_disrupt = st.sidebar.selectbox("Select Country to Disrupt", ["Taiwan", "South Korea", "Malaysia", "USA"])
-tariff_percent = st.sidebar.slider("Tariff Increase (%)", 0, 100, 20, 5)
-supply_cut_percent = st.sidebar.slider("Supply Cut Probability (%)", 0, 100, 50, 5)
-logistics_delay_days = st.sidebar.slider("Logistics Delay (days)", 0, 60, 14, 1)
+st.title("🛡️ Supply Chain Resilience Simulator")
 
-# Create the scenario dictionary from the UI inputs
-interactive_scenario = {
-    'name': scenario_name, 'country': country_to_disrupt,
-    'tariff_increase': tariff_percent / 100.0, 'supply_cut': supply_cut_percent / 100.0,
-    'logistics_delay': logistics_delay_days
-}
+# --- Sidebar for Controls ---
+with st.sidebar:
+    st.image("https://i.imgur.com/vVw2G71.png", width=100) # Placeholder logo
+    st.header("Control Panel")
+    st.markdown("Configure the simulation parameters below.")
+    
+    st.divider()
+    st.subheader("1. Component Selection")
+    selected_component = st.selectbox("Component to Analyze", master_df['Component'].unique(), label_visibility="collapsed")
 
-# ==============================================================================
-# Main Panel for Displaying Results
-# ==============================================================================
-if st.sidebar.button("Run Simulation"):
-    with st.spinner("Running Monte Carlo simulations... This may take a moment."):
-        baseline_results = run_full_simulation(baseline_strategy_df, interactive_scenario)
-        resilient_results = run_full_simulation(resilient_strategy_df, interactive_scenario)
-        final_results_df = pd.DataFrame([baseline_results, resilient_results])
+    st.subheader("2. Disruption Scenario")
+    country_to_disrupt = st.selectbox("Country to Disrupt", master_df['Country'].unique())
+    tariff_percent = st.slider("Tariff Increase (%)", 0, 100, 25, 5)
+    supply_cut_percent = st.slider("Supply Cut Probability (%)", 0, 100, 60, 5)
+    logistics_delay_days = st.slider("Logistics Delay (days)", 0, 90, 21, 3)
 
-    st.header("Simulation Results")
-    st.subheader("Executive Summary: Scenario Impact Comparison")
-    st.dataframe(final_results_df.round(2))
+    st.divider()
+    st.subheader("3. Business Context")
+    annual_volume = st.number_input("Annual Unit Volume", 1000, 10000000, 1000000, 10000, format="%d")
+    line_down_cost = st.number_input("Cost of Production Halt per Day ($)", 10000, 5000000, 500000, 10000, format="%d")
+    
+    st.divider()
+    run_button = st.button("▶ Run Simulation", use_container_width=True, type="primary")
 
-    # --- Visualization ---
-    st.subheader("Visual Comparison of Strategies")
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+# --- Main Panel for Results ---
+if run_button:
+    strategies = generate_strategies(selected_component, master_df)
     
-    # Plot 1: Cost
-    sns.barplot(data=final_results_df, x='Strategy', y='Weighted Avg Cost ($)', ax=axes[0], palette='Reds_r')
-    axes[0].set_title('Total Landed Cost per Unit')
-    
-    # Plot 2: Lead Time
-    sns.barplot(data=final_results_df, x='Strategy', y='Weighted Avg Lead Time (days)', ax=axes[1], palette='Blues_r')
-    axes[1].set_title('Weighted Average Lead Time')
-    
-    # Plot 3: Stockout Risk
-    sns.barplot(data=final_results_df, x='Strategy', y='Weighted Avg Stockout Risk (%)', ax=axes[2], palette='Greens_r')
-    axes[2].set_title('Probability of Stockout')
-    
-    plt.tight_layout()
-    st.pyplot(fig)
+    all_results = []
+    details_by_strategy = {}
+    with st.spinner("Running Monte Carlo simulations..."):
+        for name, df in strategies.items():
+            df.name = name
+            summary, details = run_full_simulation(df, {'country': country_to_disrupt, 'tariff_increase': tariff_percent/100.0, 'supply_cut': supply_cut_percent/100.0, 'logistics_delay': logistics_delay_days})
+            all_results.append(summary)
+            details_by_strategy[name] = details
+    results_df = pd.DataFrame(all_results).set_index('Strategy')
 
-    # --- Recommendations ---
-    st.header("Actionable Recommendations")
-    baseline_risk = final_results_df.loc[0, 'Weighted Avg Stockout Risk (%)']
-    resilient_risk = final_results_df.loc[1, 'Weighted Avg Stockout Risk (%)']
-    cost_increase = ((final_results_df.loc[1, 'Weighted Avg Cost ($)'] - final_results_df.loc[0, 'Weighted Avg Cost ($)']) / final_results_df.loc[0, 'Weighted Avg Cost ($)']) * 100
+    st.header("Executive Dashboard", anchor=False)
+    st.markdown(f"##### Analysis for **{selected_component}** under a simulated disruption in **{country_to_disrupt}**.")
+
+    # KPI Metrics
+    baseline_kpis = results_df.loc['Baseline (Single Source)']
+    best_resilient_strategy_name = results_df['Weighted Avg Stockout Risk (%)'].idxmin()
+    best_resilient_kpis = results_df.loc[best_resilient_strategy_name]
+    cost_of_risk = (baseline_kpis['Weighted Avg Stockout Risk (%)'] / 100) * (annual_volume / 365) * line_down_cost * 30
+
+    col1, col2, col3 = st.columns(3, gap="large")
+    with col1:
+        st.metric(label="Baseline Stockout Risk", value=f"{baseline_kpis['Weighted Avg Stockout Risk (%)']:.1f}%", delta=f"{best_resilient_kpis['Weighted Avg Stockout Risk (%)']:.1f}% in Best Strategy", delta_color="inverse")
+    with col2:
+        total_annual_cost = baseline_kpis['Weighted Avg Cost ($)'] * annual_volume
+        st.metric(label="Baseline Total Annual Cost", value=f"${total_annual_cost/1e6:.2f}M", delta=f"${(best_resilient_kpis['Weighted Avg Cost ($)'] * annual_volume)/1e6:.2f}M in Best Strategy", delta_color="inverse")
+    with col3:
+        st.metric(label="Est. Monthly Cost of Risk", value=f"${cost_of_risk/1e6:.2f}M", help="Potential financial loss from stockouts in the baseline strategy over a 30-day period.", delta="High Exposure", delta_color="off")
+
+    st.divider()
+
+    col1_main, col2_main = st.columns([0.6, 0.4], gap="large")
+    with col1_main:
+        st.subheader("Strategy Comparison", anchor=False)
+        fig, ax = plt.subplots(figsize=(8, 4))
+        sns.barplot(data=results_df.reset_index(), x='Strategy', y='Weighted Avg Stockout Risk (%)', ax=ax, palette='plasma')
+        ax.set_title(f"Stockout Risk by Sourcing Strategy", fontsize=14, pad=20)
+        ax.set_ylabel("Stockout Risk (%)")
+        ax.set_xlabel(None)
+        ax.tick_params(axis='x', rotation=15)
+        st.pyplot(fig)
     
-    st.markdown(f"""
-    - **Baseline Strategy Vulnerability:** The single-source strategy faces a **{baseline_risk:.2f}%** probability of stockout under this scenario, which is a critical risk.
-    - **Resilience Strategy Effectiveness:** By dual-sourcing, the stockout risk is dramatically lowered to **{resilient_risk:.2f}%**.
-    - **The Cost of Insurance:** Achieving this resilience requires a **{cost_increase:.2f}%** increase in the weighted average cost per unit. This is the premium paid to avoid costly line-down events.
-    
-    **Conclusion:** The simulation strongly supports diversifying the supply chain for the Mainboard Chipset to mitigate significant geopolitical risks, even at a higher unit cost.
-    """)
+    with col2_main:
+        st.subheader("Deep Dive by Strategy", anchor=False)
+        tabs = st.tabs([f"{k}" for k in details_by_strategy.keys()])
+        for tab, (strategy_name, details) in zip(tabs, details_by_strategy.items()):
+            with tab:
+                st.dataframe(details.style.format({'Sourcing %': '{:.0f}%', 'Final Cost ($)': '${:.2f}', 'Final Lead Time (days)': '{:.0f}', 'Stockout Risk (%)': '{:.2f}%'}), use_container_width=True)
+
+    with st.expander("Show Business Continuity Plan & Recommendations", expanded=True):
+        st.markdown(f"""
+        <h4 style='color: #a1a1a1;'>Business Continuity Plan for: <span style='color: #ffffff;'>{selected_component}</span></h4>
+        <p>Based on a simulated disruption in <strong>{country_to_disrupt}</strong>.</p>
+        
+        <hr style='margin-top: 0; margin-bottom: 1rem;'>
+
+        <h5><i class="bi bi-exclamation-triangle-fill" style="color: #ff4b4b;"></i>  Threat Assessment</h5>
+        <p>The current <b>Baseline (Single Source)</b> strategy faces a <b>{baseline_kpis['Weighted Avg Stockout Risk (%)']:.1f}% stockout risk</b>. This represents a critical vulnerability with a potential monthly financial impact (Cost of Risk) of approximately <b>${cost_of_risk/1e6:.2f} million</b>.</p>
+
+        <h5><i class="bi bi-shield-check" style="color: #28a745;"></i>  Recommended Strategy: `{best_resilient_strategy_name}`</h5>
+        <p>Diversification is essential. The <b>`{best_resilient_strategy_name}`</b> strategy is the most effective at mitigating risk:</p>
+        <ul>
+            <li><b>Reduces Stockout Risk</b> to a manageable <b>{best_resilient_kpis['Weighted Avg Stockout Risk (%)']:.1f}%</b>.</li>
+            <li><b>Total Annual Cost</b> is estimated at <b>${(best_resilient_kpis['Weighted Avg Cost ($)'] * annual_volume)/1e6:.2f} million</b>. This cost increase is a necessary premium for supply chain insurance.</li>
+            <li><b>Stabilizes Lead Time</b> to an average of <b>{best_resilient_kpis['Weighted Avg Lead Time (days)']:.0f} days</b>.</li>
+        </ul>
+
+        <h5><i class="bi bi-card-checklist"></i>  Immediate Actions (BCP Phase 1)</h5>
+        <ol>
+            <li><b>Secure Buffer Stock:</b> Immediately procure an additional 60-90 days of safety stock for the <b>{selected_component}</b> from the primary supplier.</li>
+            <li><b>Initiate Diversification:</b> Form a cross-functional task force to begin qualification and contracting of the suppliers identified in the recommended strategy.</li>
+        </ol>
+        """, unsafe_allow_html=True)
+
 else:
-    st.info("Adjust the parameters in the sidebar and click 'Run Simulation' to see the results.")
+    st.info("Configure your scenario in the sidebar and click **▶ Run Simulation** to generate the analysis.")
