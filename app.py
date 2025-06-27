@@ -1,196 +1,170 @@
-# app.py (Version 2.1 - Corrected and Final)
+# app.py (Universal Business Simulator v3.1 - Premium UI/UX)
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import random
 
 # ==============================================================================
-# 1. PAGE CONFIGURATION & STYLING
+# 1. PAGE CONFIGURATION & AESTHETIC STYLING
 # ==============================================================================
 st.set_page_config(
-    page_title="Supply Chain Resilience Simulator",
-    page_icon="🛡️",
+    page_title="Strategic Simulation Platform",
     layout="wide"
 )
 
-# Inject custom CSS for professional UI/UX
+# --- Inject custom CSS for a premium, modern UI ---
 st.markdown("""
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
-        .stApp { background-color: #0f1116; }
-        .stMetric {
-            background-color: #1a1c24;
-            border: 1px solid #2e3439;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+        /* --- Base & General --- */
+        .stApp {
+            background-color: #0d1117; 
         }
-        .stMetric .st-ae { font-size: 1.1rem; color: #a1a1a1; }
-        .stButton>button { border-radius: 10px; font-weight: bold; }
+        /* --- Sidebar Styling --- */
+        [data-testid="stSidebar"] {
+            background-color: #161b22;
+            border-right: 1px solid #30363d;
+        }
+        /* --- Metric Card Styling --- */
+        .metric-card {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            padding: 25px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .metric-card h5 { /* Icon and Title */
+            margin-bottom: 15px;
+            color: #c9d1d9;
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+        .metric-card h5 .bi { /* Icon specific */
+            margin-right: 10px;
+            font-size: 1.5rem;
+            vertical-align: middle;
+        }
+        /* --- Button Styling --- */
+        .stButton>button {
+            border-radius: 8px;
+            font-weight: bold;
+            border: 1px solid #30363d;
+        }
+        .stButton>button[kind="primary"] {
+            border: 1px solid #238636;
+        }
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. DATA LOADING & CACHING
+# 2. SESSION STATE INITIALIZATION
 # ==============================================================================
-@st.cache_data
-def load_data():
-    master_data = {
-        'Component': ['High-end CPU die', 'Mainboard chipset', 'Mainboard chipset', 'Mainboard chipset', 'FPGA (Stratix-class)', 'FPGA (Stratix-class)', 'Power management IC (PMIC)', 'Power management IC (PMIC)'],
-        'Supplier': ['Intel Fab (own)', 'TSMC', 'Intel Fab (Ohio)', 'Si-Bharat Fab', 'Intel Foundry', 'Samsung', 'GlobalFoundries', 'ASE'],
-        'Country': ['USA', 'Taiwan', 'USA', 'India', 'USA', 'South Korea', 'USA', 'Malaysia'],
-        'Unit Cost ($)': [150.00, 25.00, 32.00, 27.50, 120.00, 115.00, 8.00, 7.50],
-        'Avg Lead Time (days)': [90, 75, 50, 60, 112, 120, 130, 145],
-        'Primary Supplier': [True, True, False, False, True, False, True, False]
-    }
-    df = pd.DataFrame(master_data)
-    stockout_inputs = {'Safety stock days': {'baseline': 30},'Lead time distribution': {'std': 15},'Forecast error (σ/μ)': {'volatile': 0.35}}
-    return df, stockout_inputs
-
-master_df, stockout_inputs = load_data()
+if 'variables' not in st.session_state:
+    st.session_state.variables = []
 
 # ==============================================================================
-# 3. CORE LOGIC (STRATEGY GENERATION & SIMULATION ENGINE)
+# 3. CORE SIMULATION ENGINE (Unchanged - Pure Logic)
 # ==============================================================================
-def generate_strategies(selected_component, df):
-    strategies = {}
-    component_suppliers = df[df['Component'] == selected_component]
-    primary_supplier = component_suppliers[component_suppliers['Primary Supplier']].copy()
-    primary_supplier['Sourcing %'] = 100.0
-    strategies['Baseline (Single Source)'] = primary_supplier
-
-    secondary_supplier = component_suppliers[(~component_suppliers['Primary Supplier']) & (component_suppliers['Country'] != 'India')].head(1)
-    if not secondary_supplier.empty:
-        dual_source_df = pd.concat([primary_supplier, secondary_supplier])
-        dual_source_df['Sourcing %'] = [60.0, 40.0]
-        strategies['Dual-Source (Global)'] = dual_source_df
-
-    indian_supplier = component_suppliers[component_suppliers['Country'] == 'India'].head(1)
-    if not indian_supplier.empty:
-        onshore_df = pd.concat([primary_supplier, indian_supplier])
-        onshore_df['Sourcing %'] = [50.0, 50.0]
-        strategies['Onshore (Indo-Global Mix)'] = onshore_df
-    return strategies
-
-@st.cache_data
-def monte_carlo_stockout_simulation(avg_lead_time, std_dev_lead_time, logistics_delay_days, supply_cut_prob):
-    avg_daily_demand = 1000; forecast_error = stockout_inputs['Forecast error (σ/μ)']['volatile']
-    std_dev_demand = avg_daily_demand * forecast_error; safety_stock = avg_daily_demand * stockout_inputs['Safety stock days']['baseline']
-    reorder_point = (avg_daily_demand * avg_lead_time) + safety_stock; all_sim_service_levels = []
-    for _ in range(1000):
-        inventory, stockout_days, order_placed = reorder_point, 0, False; order_pipeline = {}
-        for day in range(1, 365 + 1):
-            if day in order_pipeline: inventory += order_pipeline.pop(day); order_placed = False
-            demand = max(0, np.random.normal(avg_daily_demand, std_dev_demand))
-            if inventory >= demand: inventory -= demand
-            else: inventory, stockout_days = 0, stockout_days + 1
-            if inventory <= reorder_point and not order_placed:
-                if random.random() > supply_cut_prob:
-                    disrupted_lead_time = int(np.random.normal(avg_lead_time, std_dev_lead_time) + logistics_delay_days)
-                    arrival_day = day + max(1, disrupted_lead_time); order_pipeline[arrival_day] = reorder_point; order_placed = True
-        all_sim_service_levels.append((365 - stockout_days) / 365)
-    return np.mean(all_sim_service_levels)
-
-# **FIX 1 of 2: Updated function definition to accept strategy_name**
-def run_full_simulation(strategy_name, strategy_df, scenario):
-    results = []
-    for _, supplier in strategy_df.iterrows():
-        base_cost, base_avg_lead_time = supplier['Unit Cost ($)'], supplier['Avg Lead Time (days)']
-        impacted_cost, logistics_delay, supply_cut = base_cost, 0, 0.0
-        if supplier['Country'] == scenario['country']:
-            impacted_cost *= (1 + scenario['tariff_increase']); logistics_delay, supply_cut = scenario['logistics_delay'], scenario['supply_cut']
-        service_level = monte_carlo_stockout_simulation(base_avg_lead_time, stockout_inputs['Lead time distribution']['std'], logistics_delay, supply_cut)
-        results.append({'Supplier': supplier['Supplier'], 'Country': supplier['Country'], 'Sourcing %': supplier['Sourcing %'], 'Final Cost ($)': impacted_cost, 'Final Lead Time (days)': base_avg_lead_time + logistics_delay, 'Stockout Risk (%)': (1 - service_level) * 100})
-    df_results = pd.DataFrame(results)
-    
-    # **FIX 2 of 2: Using the strategy_name argument directly**
-    summary = {
-        'Strategy': strategy_name, 
-        'Weighted Avg Cost ($)': np.average(df_results['Final Cost ($)'], weights=df_results['Sourcing %']), 
-        'Weighted Avg Lead Time (days)': np.average(df_results['Final Lead Time (days)'], weights=df_results['Sourcing %']), 
-        'Weighted Avg Stockout Risk (%)': np.average(df_results['Stockout Risk (%)'], weights=df_results['Sourcing %'])
-    }
-    return summary, df_results
+def run_monte_carlo(formula, variables, num_simulations):
+    simulation_results = []
+    for _ in range(num_simulations):
+        local_scope = {var['name']: (np.random.normal(var['param1'], var['param2']) if var['dist'] == 'Normal' else
+                                     np.random.uniform(var['param1'], var['param2']) if var['dist'] == 'Uniform' else
+                                     var['param1']) for var in variables}
+        try:
+            result = eval(formula, {"__builtins__": None, "np": np}, local_scope)
+            simulation_results.append(result)
+        except Exception as e:
+            st.error(f"Error evaluating formula: {e}. Check syntax and variable names.", icon="🚨")
+            return None
+    return np.array(simulation_results)
 
 # ==============================================================================
-# 4. APPLICATION UI LAYOUT
+# 4. UI LAYOUT & COMPONENTS
 # ==============================================================================
-st.title("🛡️ Supply Chain Resilience Simulator")
+st.markdown('<h1 style="text-align: center;"><i class="bi bi-bar-chart-line-fill"></i> Strategic Simulation Platform</h1>', unsafe_allow_html=True)
+st.markdown("<h5 style='text-align: center; color: #8b949e;'>Model any business scenario under uncertainty to forecast outcomes and quantify risk.</h5>", unsafe_allow_html=True)
+st.divider()
 
+# --- Sidebar for Model Building ---
 with st.sidebar:
-    st.image("https://i.imgur.com/vVw2G71.png", width=100)
-    st.header("Control Panel")
-    st.markdown("Configure the simulation parameters below.")
+    st.markdown("<h3><i class='bi bi-tools'></i> Model Builder</h3>", unsafe_allow_html=True)
+    st.markdown("Define your inputs, model, and simulation settings.")
     st.divider()
-    st.subheader("1. Component Selection")
-    selected_component = st.selectbox("Component to Analyze", master_df['Component'].unique(), label_visibility="collapsed")
-    st.subheader("2. Disruption Scenario")
-    country_to_disrupt = st.selectbox("Country to Disrupt", master_df['Country'].unique())
-    tariff_percent = st.slider("Tariff Increase (%)", 0, 100, 25, 5)
-    supply_cut_percent = st.slider("Supply Cut Probability (%)", 0, 100, 60, 5)
-    logistics_delay_days = st.slider("Logistics Delay (days)", 0, 90, 21, 3)
-    st.divider()
-    st.subheader("3. Business Context")
-    annual_volume = st.number_input("Annual Unit Volume", 1000, 10000000, 1000000, 10000, format="%d")
-    line_down_cost = st.number_input("Cost of Production Halt per Day ($)", 10000, 5000000, 500000, 10000, format="%d")
-    st.divider()
-    run_button = st.button("▶ Run Simulation", use_container_width=True, type="primary")
 
-if run_button:
-    strategies = generate_strategies(selected_component, master_df)
+    st.markdown('<h5><i class="bi bi-sliders"></i> 1. Define Input Variables</h5>', unsafe_allow_html=True)
+    for i, var in enumerate(st.session_state.variables):
+        with st.container():
+            c1, c2 = st.columns([0.85, 0.15])
+            with c1:
+                var['name'] = st.text_input("Variable Name", var['name'], key=f"name_{i}", placeholder="e.g., Revenue_Growth").replace(" ", "_")
+                var['dist'] = st.selectbox("Distribution", ["Normal", "Uniform", "Constant"], index=["Normal", "Uniform", "Constant"].index(var['dist']), key=f"dist_{i}")
+                if var['dist'] == "Normal": p1, p2 = st.columns(2); var['param1'] = p1.number_input("Mean (μ)", value=var['param1'], key=f"p1_{i}"); var['param2'] = p2.number_input("Std Dev (σ)", value=var['param2'], key=f"p2_{i}", min_value=0.0)
+                elif var['dist'] == "Uniform": p1, p2 = st.columns(2); var['param1'] = p1.number_input("Min", value=var['param1'], key=f"p1_{i}"); var['param2'] = p2.number_input("Max", value=var['param2'], key=f"p2_{i}")
+                else: var['param1'] = st.number_input("Value", value=var['param1'], key=f"p1_{i}"); var['param2'] = 0
+            with c2:
+                st.write("") # Spacer
+                st.write("") # Spacer
+                if st.button("🗑️", key=f"del_{i}", help="Remove this variable", use_container_width=True):
+                    st.session_state.variables.pop(i); st.rerun()
+            st.markdown("<hr style='margin:10px 0; border-color: #30363d;'>", unsafe_allow_html=True)
+
+    if st.button("Add Variable", use_container_width=True):
+        st.session_state.variables.append({'name': f'Variable_{len(st.session_state.variables)+1}', 'dist': 'Normal', 'param1': 100.0, 'param2': 10.0})
+        st.rerun()
     
-    all_results = []
-    details_by_strategy = {}
-    with st.spinner("Running Monte Carlo simulations..."):
-        # **FIX 3 of 3: Passing the 'name' explicitly when calling the function**
-        for name, df in strategies.items():
-            summary, details = run_full_simulation(name, df, {'country': country_to_disrupt, 'tariff_increase': tariff_percent/100.0, 'supply_cut': supply_cut_percent/100.0, 'logistics_delay': logistics_delay_days})
-            all_results.append(summary)
-            details_by_strategy[name] = details
-    results_df = pd.DataFrame(all_results).set_index('Strategy')
-
-    st.header("Executive Dashboard", anchor=False)
-    st.markdown(f"##### Analysis for **{selected_component}** under a simulated disruption in **{country_to_disrupt}**.")
-
-    # KPI Metrics, etc. (The rest of the UI code is unchanged)
-    baseline_kpis = results_df.loc['Baseline (Single Source)']
-    best_resilient_strategy_name = results_df['Weighted Avg Stockout Risk (%)'].idxmin()
-    best_resilient_kpis = results_df.loc[best_resilient_strategy_name]
-    cost_of_risk = (baseline_kpis['Weighted Avg Stockout Risk (%)'] / 100) * (annual_volume / 365) * line_down_cost * 30
-
-    col1, col2, col3 = st.columns(3, gap="large")
-    with col1: st.metric(label="Baseline Stockout Risk", value=f"{baseline_kpis['Weighted Avg Stockout Risk (%)']:.1f}%", delta=f"{best_resilient_kpis['Weighted Avg Stockout Risk (%)']:.1f}% in Best Strategy", delta_color="inverse")
-    with col2: total_annual_cost = baseline_kpis['Weighted Avg Cost ($)'] * annual_volume; st.metric(label="Baseline Total Annual Cost", value=f"${total_annual_cost/1e6:.2f}M", delta=f"${(best_resilient_kpis['Weighted Avg Cost ($)'] * annual_volume)/1e6:.2f}M in Best Strategy", delta_color="inverse")
-    with col3: st.metric(label="Est. Monthly Cost of Risk", value=f"${cost_of_risk/1e6:.2f}M", help="Potential financial loss from stockouts in the baseline strategy over a 30-day period.", delta="High Exposure", delta_color="off")
     st.divider()
+    st.markdown('<h5><i class="bi bi-calculator-fill"></i> 2. Define Model Formula</h5>', unsafe_allow_html=True)
+    st.info("Use variable names from above. Example: `(Revenue - Costs) * 0.2`", icon="ℹ️")
+    formula = st.text_area("Formula", "(Variable_1 - 50) * 0.75", label_visibility="collapsed")
+    
+    st.divider()
+    st.markdown('<h5><i class="bi bi-gear-fill"></i> 3. Configure Simulation</h5>', unsafe_allow_html=True)
+    num_simulations = st.select_slider("Number of Simulations", [1000, 5000, 10000, 20000, 50000], value=10000)
+    
+    st.divider()
+    run_button = st.button("Run Simulation", use_container_width=True, type="primary")
 
-    col1_main, col2_main = st.columns([0.6, 0.4], gap="large")
-    with col1_main:
-        st.subheader("Strategy Comparison", anchor=False)
-        fig, ax = plt.subplots(figsize=(8, 4)); sns.barplot(data=results_df.reset_index(), x='Strategy', y='Weighted Avg Stockout Risk (%)', ax=ax, palette='plasma')
-        ax.set_title(f"Stockout Risk by Sourcing Strategy", fontsize=14, pad=20); ax.set_ylabel("Stockout Risk (%)"); ax.set_xlabel(None); ax.tick_params(axis='x', rotation=15)
-        st.pyplot(fig)
-    with col2_main:
-        st.subheader("Deep Dive by Strategy", anchor=False)
-        tabs = st.tabs([f"{k}" for k in details_by_strategy.keys()])
-        for tab, (strategy_name, details) in zip(tabs, details_by_strategy.items()):
-            with tab: st.dataframe(details.style.format({'Sourcing %': '{:.0f}%', 'Final Cost ($)': '${:.2f}', 'Final Lead Time (days)': '{:.0f}', 'Stockout Risk (%)': '{:.2f}%'}), use_container_width=True)
+# --- Main Panel for Results ---
+if run_button:
+    if not st.session_state.variables: st.warning("Please add at least one input variable to run a simulation.", icon="⚠️")
+    elif not formula: st.warning("Please enter a model formula to simulate.", icon="⚠️")
+    else:
+        results = run_monte_carlo(formula, st.session_state.variables, num_simulations)
+        
+        if results is not None:
+            st.markdown("<h3><i class='bi bi-clipboard-data-fill'></i> Simulation Dashboard</h3>", unsafe_allow_html=True)
+            
+            # KPI Metric Cards
+            mean_val, std_val = results.mean(), results.std()
+            p5, p95 = np.percentile(results, 5), np.percentile(results, 95)
+            
+            col1, col2, col3 = st.columns(3, gap="large")
+            with col1:
+                st.markdown(f'<div class="metric-card"><h5><i class="bi bi-bullseye"></i>Average Outcome</h5><h2>{mean_val:,.2f}</h2></div>', unsafe_allow_html=True)
+            with col2:
+                st.markdown(f'<div class="metric-card"><h5><i class="bi bi-lightning-charge-fill"></i>Risk (Std. Dev)</h5><h2>{std_val:,.2f}</h2></div>', unsafe_allow_html=True)
+            with col3:
+                st.markdown(f'<div class="metric-card"><h5><i class="bi bi-arrows-left-right"></i>90% Confidence Range</h5><h4>{p5:,.2f} — {p95:,.2f}</h4></div>', unsafe_allow_html=True)
 
-    with st.expander("Show Business Continuity Plan & Recommendations", expanded=True):
-        st.markdown(f"""
-        <h4 style='color: #a1a1a1;'>Business Continuity Plan for: <span style='color: #ffffff;'>{selected_component}</span></h4>
-        <p>Based on a simulated disruption in <strong>{country_to_disrupt}</strong>.</p><hr style='margin-top: 0; margin-bottom: 1rem;'>
-        <h5><i class="bi bi-exclamation-triangle-fill" style="color: #ff4b4b;"></i>  Threat Assessment</h5>
-        <p>The current <b>Baseline (Single Source)</b> strategy faces a <b>{baseline_kpis['Weighted Avg Stockout Risk (%)']:.1f}% stockout risk</b>. This represents a critical vulnerability with a potential monthly financial impact (Cost of Risk) of approximately <b>${cost_of_risk/1e6:.2f} million</b>.</p>
-        <h5><i class="bi bi-shield-check" style="color: #28a745;"></i>  Recommended Strategy: `{best_resilient_strategy_name}`</h5>
-        <p>Diversification is essential. The <b>`{best_resilient_strategy_name}`</b> strategy is the most effective at mitigating risk:</p>
-        <ul><li><b>Reduces Stockout Risk</b> to a manageable <b>{best_resilient_kpis['Weighted Avg Stockout Risk (%)']:.1f}%</b>.</li><li><b>Total Annual Cost</b> is estimated at <b>${(best_resilient_kpis['Weighted Avg Cost ($)'] * annual_volume)/1e6:.2f} million</b>. This cost increase is a necessary premium for supply chain insurance.</li><li><b>Stabilizes Lead Time</b> to an average of <b>{best_resilient_kpis['Weighted Avg Lead Time (days)']:.0f} days</b>.</li></ul>
-        <h5><i class="bi bi-card-checklist"></i>  Immediate Actions (BCP Phase 1)</h5>
-        <ol><li><b>Secure Buffer Stock:</b> Immediately procure an additional 60-90 days of safety stock for the <b>{selected_component}</b>.</li><li><b>Initiate Diversification:</b> Form a cross-functional task force to begin qualification and contracting of the suppliers identified in the recommended strategy.</li></ol>
-        """, unsafe_allow_html=True)
+            st.divider()
 
+            # Visualization
+            st.markdown("<h4><i class='bi bi-distribute-vertical'></i> Distribution of Potential Outcomes</h4>", unsafe_allow_html=True)
+            fig, ax = plt.subplots()
+            sns.histplot(results, kde=True, ax=ax, color='#7E57C2', bins=50)
+            ax.axvline(mean_val, color='#FDD835', linestyle='--', lw=2, label=f"Mean: {mean_val:,.2f}")
+            ax.set_title("Distribution of Potential Outcomes", fontsize=16, color='white', pad=20)
+            ax.set_xlabel("Outcome Value", color='white'); ax.set_ylabel("Frequency", color='white')
+            ax.tick_params(colors='white'); ax.spines['left'].set_color('white'); ax.spines['bottom'].set_color('white'); ax.spines['top'].set_color('none'); ax.spines['right'].set_color('none')
+            fig.patch.set_facecolor('#0d1117'); ax.set_facecolor('#161b22')
+            ax.legend()
+            ax.grid(True, which='both', linestyle='--', linewidth=0.5, color='#30363d')
+            st.pyplot(fig)
+
+            with st.expander("View Raw Simulation Data"):
+                st.dataframe(pd.DataFrame(results, columns=['Outcome']))
 else:
-    st.info("Configure your scenario in the sidebar and click **▶ Run Simulation** to generate the analysis.")
+    st.markdown("<div style='text-align: center; padding-top: 50px;'><h3 style='color: #8b949e;'>Build your model in the sidebar and click 'Run Simulation' to forecast the future.</h3></div>", unsafe_allow_html=True)
