@@ -1,10 +1,13 @@
-# app.py (Definitive Supply Chain Resilience Simulator)
+# app.py (Definitive, Corrected & Enhanced Version)
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import plotly.graph_objects as go
+import plotly.express as px
+import random  # <-- CRITICAL BUG FIX: Import the 'random' module
 
 # ==============================================================================
 # 1. PAGE CONFIGURATION & STYLING
@@ -15,7 +18,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Inject custom CSS with the Lucide icon library for a premium, industry-grade UI/UX
+# Professional UI/UX with Lucide icons and refined styling
 st.markdown("""
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -24,7 +27,6 @@ st.markdown("""
         i[data-lucide] { width: 20px; height: 20px; stroke-width: 2px; vertical-align: middle; margin-right: 0.5rem; color: #a1a1a1; }
         h1 > i[data-lucide] { width: 32px; height: 32px; }
         .stMetric { background-color: #1a1a1a; border: 1px solid #2c2c2c; border-radius: 12px; padding: 20px; box-shadow: 0 8px 16px rgba(0,0,0,0.4); }
-        .stMetric .st-ae { font-size: 1.1rem; color: #a1a1a1; }
         .stButton>button { border-radius: 8px; font-weight: bold; border: 1px solid #4a4a4a; transition: all 0.2s ease-in-out; }
         .stButton>button:hover { border-color: #007bff; color: #007bff; }
         .stExpander { border: 1px solid #2c2c2c !important; border-radius: 10px !important; background-color: #1c1c1c; }
@@ -54,44 +56,43 @@ master_df, stockout_inputs = load_data()
 # ==============================================================================
 # 3. CORE SIMULATION ENGINE
 # ==============================================================================
-def generate_strategies(selected_component, df):
+def generate_dynamic_strategies(component, primary_supplier, alt_supplier_name, sourcing_split, df):
     strategies = {}
-    component_suppliers = df[df['Component'] == selected_component]
-    primary_supplier = component_suppliers[component_suppliers['Primary Supplier']].copy()
-    if not primary_supplier.empty:
-        primary_supplier['Sourcing %'] = 100.0
-        strategies['Baseline (Single Source)'] = primary_supplier
+    
+    # Baseline Strategy
+    primary_df = primary_supplier.copy()
+    primary_df['Sourcing %'] = 100.0
+    strategies['Baseline (Single Source)'] = primary_df
 
-    secondary_supplier = component_suppliers[(~component_suppliers['Primary Supplier']) & (component_suppliers['Country'] != 'India')].head(1)
-    if not primary_supplier.empty and not secondary_supplier.empty:
-        dual_source_df = pd.concat([primary_supplier, secondary_supplier])
-        dual_source_df['Sourcing %'] = [60.0, 40.0]
-        strategies['Dual-Source (Global)'] = dual_source_df
-
-    indian_supplier = component_suppliers[component_suppliers['Country'] == 'India'].head(1)
-    if not primary_supplier.empty and not indian_supplier.empty:
-        onshore_df = pd.concat([primary_supplier, indian_supplier])
-        onshore_df['Sourcing %'] = [50.0, 50.0]
-        strategies['Onshore (Indo-Global Mix)'] = onshore_df
+    # Dynamic Diversified Strategy
+    if alt_supplier_name:
+        alt_supplier_df = df[(df['Component'] == component) & (df['Supplier'] == alt_supplier_name)].copy()
+        if not alt_supplier_df.empty:
+            diversified_df = pd.concat([primary_df, alt_supplier_df])
+            diversified_df['Sourcing %'] = [sourcing_split, 100 - sourcing_split]
+            strategy_name = f"Diversified ({primary_supplier['Supplier'].iloc[0]}/{alt_supplier_name})"
+            strategies[strategy_name] = diversified_df
+            
     return strategies
 
 @st.cache_data
 def monte_carlo_stockout_simulation(avg_lead_time, std_dev_lead_time, logistics_delay_days, supply_cut_prob):
-    avg_daily_demand = 1000; forecast_error = stockout_inputs['Forecast error (σ/μ)']['volatile']
-    std_dev_demand = avg_daily_demand * forecast_error; safety_stock = avg_daily_demand * stockout_inputs['Safety stock days']['baseline']
-    reorder_point = (avg_daily_demand * avg_lead_time) + safety_stock; all_sim_service_levels = []
-    for _ in range(2000): # Reduced iterations for faster web response, still statistically significant
-        inventory, stockout_days, order_placed = reorder_point, 0, False; order_pipeline = {}
-        for day in range(1, 365 + 1):
-            if day in order_pipeline: inventory += order_pipeline.pop(day); order_placed = False
-            demand = max(0, np.random.normal(avg_daily_demand, std_dev_demand))
-            if inventory >= demand: inventory -= demand
-            else: inventory, stockout_days = 0, stockout_days + 1
-            if inventory <= reorder_point and not order_placed:
-                if random.random() > supply_cut_prob:
-                    disrupted_lead_time = int(np.random.normal(avg_lead_time, std_dev_lead_time) + logistics_delay_days)
-                    arrival_day = day + max(1, disrupted_lead_time); order_pipeline[arrival_day] = reorder_point; order_placed = True
-        all_sim_service_levels.append((365 - stockout_days) / 365)
+    # This is the core stochastic engine.
+    avg_daily_demand=1000; forecast_error=stockout_inputs['Forecast error (σ/μ)']['volatile']; std_dev_demand=avg_daily_demand*forecast_error
+    safety_stock=avg_daily_demand*stockout_inputs['Safety stock days']['baseline']; reorder_point=(avg_daily_demand*avg_lead_time)+safety_stock
+    all_sim_service_levels=[]
+    for _ in range(2000):
+        inventory,stockout_days,order_placed=reorder_point,0,False; order_pipeline={}
+        for day in range(1,366):
+            if day in order_pipeline: inventory+=order_pipeline.pop(day); order_placed=False
+            demand=max(0,np.random.normal(avg_daily_demand,std_dev_demand))
+            if inventory>=demand: inventory-=demand
+            else: inventory,stockout_days=0,stockout_days+1
+            if inventory<=reorder_point and not order_placed:
+                if random.random()>supply_cut_prob:
+                    disrupted_lead_time=int(np.random.normal(avg_lead_time,std_dev_lead_time)+logistics_delay_days)
+                    arrival_day=day+max(1,disrupted_lead_time); order_pipeline[arrival_day]=reorder_point; order_placed=True
+        all_sim_service_levels.append((365-stockout_days)/365)
     return np.mean(all_sim_service_levels)
 
 def run_full_simulation(strategy_name, strategy_df, scenario):
@@ -100,46 +101,57 @@ def run_full_simulation(strategy_name, strategy_df, scenario):
         base_cost, base_avg_lead_time = supplier['Unit Cost ($)'], supplier['Avg Lead Time (days)']
         impacted_cost, logistics_delay, supply_cut = base_cost, 0, 0.0
         if supplier['Country'] == scenario['country']:
-            impacted_cost *= (1 + scenario['tariff_increase']); logistics_delay, supply_cut = scenario['logistics_delay'], scenario['supply_cut']
-        service_level = monte_carlo_stockout_simulation(base_avg_lead_time, stockout_inputs['Lead time distribution']['std'], logistics_delay, supply_cut)
-        results.append({'Supplier': supplier['Supplier'], 'Country': supplier['Country'], 'Sourcing %': supplier['Sourcing %'], 'Final Cost ($)': impacted_cost, 'Final Lead Time (days)': base_avg_lead_time + logistics_delay, 'Stockout Risk (%)': (1 - service_level) * 100})
-    df_results = pd.DataFrame(results)
-    summary = {'Strategy': strategy_name, 'Weighted Avg Cost ($)': np.average(df_results['Final Cost ($)'], weights=df_results['Sourcing %']), 'Weighted Avg Lead Time (days)': np.average(df_results['Final Lead Time (days)'], weights=df_results['Sourcing %']), 'Weighted Avg Stockout Risk (%)': np.average(df_results['Stockout Risk (%)'], weights=df_results['Sourcing %'])}
+            impacted_cost*=(1+scenario['tariff_increase']); logistics_delay,supply_cut=scenario['logistics_delay'],scenario['supply_cut']
+        service_level=monte_carlo_stockout_simulation(base_avg_lead_time, stockout_inputs['Lead time distribution']['std'], logistics_delay, supply_cut)
+        results.append({'Supplier':supplier['Supplier'], 'Country':supplier['Country'], 'Sourcing %':supplier['Sourcing %'], 'Final Cost ($)':impacted_cost, 'Final Lead Time (days)':base_avg_lead_time+logistics_delay, 'Stockout Risk (%)':(1-service_level)*100})
+    df_results=pd.DataFrame(results)
+    summary={'Strategy':strategy_name, 'Weighted Avg Cost ($)':np.average(df_results['Final Cost ($)'],weights=df_results['Sourcing %']), 'Weighted Avg Lead Time (days)':np.average(df_results['Final Lead Time (days)'],weights=df_results['Sourcing %']), 'Weighted Avg Stockout Risk (%)':np.average(df_results['Stockout Risk (%)'],weights=df_results['Sourcing %'])}
     return summary, df_results
 
 # ==============================================================================
 # 4. APPLICATION UI LAYOUT
 # ==============================================================================
 st.markdown("<h1><i data-lucide='shield-alert'></i> Supply Chain Resilience Simulator</h1>", unsafe_allow_html=True)
-st.markdown("A strategic tool for Indian Electronics Manufacturers to quantify geopolitical risks and evaluate business continuity plans.")
 
+# --- Sidebar Controls ---
 with st.sidebar:
     st.markdown("<h2><i data-lucide='sliders-horizontal'></i> Control Panel</h2>", unsafe_allow_html=True)
-    st.markdown("Configure the simulation parameters below.")
     st.divider()
-    
-    st.subheader("1. Component Selection")
-    selected_component = st.selectbox("Component to Analyze", master_df['Component'].unique(), label_visibility="collapsed")
 
-    st.subheader("2. Geopolitical Disruption Scenario")
+    st.subheader("1. Component & Strategy")
+    selected_component = st.selectbox("Component to Analyze", master_df['Component'].unique())
+    
+    primary_supplier = master_df[(master_df['Component'] == selected_component) & (master_df['Primary Supplier'])]
+    alt_suppliers = master_df[(master_df['Component'] == selected_component) & (~master_df['Primary Supplier'])]
+    
+    if not alt_suppliers.empty:
+        alt_supplier_name = st.selectbox("Select Alternative Supplier", alt_suppliers['Supplier'].unique())
+        sourcing_split = st.slider("Primary Supplier Sourcing %", 0, 100, 60, 5, help="The remaining percentage will be sourced from the alternative supplier.")
+    else:
+        alt_supplier_name = None
+        st.info(f"No alternative suppliers found for {selected_component} in master data.")
+        sourcing_split = 100
+
+    st.subheader("2. Geopolitical Disruption")
     country_to_disrupt = st.selectbox("Select Country to Disrupt", master_df['Country'].unique(), index=1)
     tariff_percent = st.slider("Import Tariff Increase (%)", 0, 100, 25, 5)
-    supply_cut_percent = st.slider("Supply Cut / Export Ban Probability (%)", 0, 100, 60, 5)
+    supply_cut_percent = st.slider("Supply Cut / Ban Probability (%)", 0, 100, 60, 5)
     logistics_delay_days = st.slider("Logistics & Port Delay (days)", 0, 90, 21, 3)
 
     st.divider()
-    st.subheader("3. Business & Financial Context")
-    annual_volume = st.number_input("Annual Unit Volume", 1000, 10000000, 1000000, 10000, format="%d")
-    line_down_cost = st.number_input("Cost of Production Halt per Day ($)", 10000, 5000000, 500000, 10000, format="%d")
+    st.subheader("3. Financial Context")
+    annual_volume = st.number_input("Annual Unit Volume", 1000, 10000000, 1000000, 10000)
+    line_down_cost = st.number_input("Cost of Production Halt per Day ($)", 10000, 5000000, 500000, 10000)
     
     st.divider()
     run_button = st.button("Run Simulation", use_container_width=True, type="primary")
 
+# --- Main Dashboard Panel ---
 if run_button:
-    strategies = generate_strategies(selected_component, master_df)
+    strategies = generate_dynamic_strategies(selected_component, primary_supplier, alt_supplier_name, sourcing_split, master_df)
     
     if not strategies:
-        st.error(f"No sourcing strategies could be generated for '{selected_component}'. Please check the master data.")
+        st.error(f"No sourcing strategies generated. Please check data for {selected_component}.")
     else:
         all_results, details_by_strategy = [], {}
         with st.spinner("Running thousands of supply chain scenarios..."):
@@ -149,48 +161,48 @@ if run_button:
         results_df = pd.DataFrame(all_results).set_index('Strategy')
 
         st.markdown("<h2><i data-lucide='bar-chart-3'></i> Executive Dashboard</h2>", unsafe_allow_html=True)
-        st.markdown(f"##### Analysis for **{selected_component}** under a simulated disruption in **{country_to_disrupt}**.")
-
         baseline_kpis = results_df.loc['Baseline (Single Source)']
-        best_resilient_strategy_name = results_df['Weighted Avg Stockout Risk (%)'].idxmin()
-        best_resilient_kpis = results_df.loc[best_resilient_strategy_name]
-        cost_of_risk = (baseline_kpis['Weighted Avg Stockout Risk (%)'] / 100) * (annual_volume / 365) * line_down_cost * 30
 
-        col1, col2, col3 = st.columns(3, gap="large")
-        with col1: st.metric(label="Baseline Stockout Risk", value=f"{baseline_kpis['Weighted Avg Stockout Risk (%)']:.1f}%", delta=f"{best_resilient_kpis['Weighted Avg Stockout Risk (%)']:.1f}% in Best Strategy", delta_color="inverse")
-        with col2: total_annual_cost = baseline_kpis['Weighted Avg Cost ($)'] * annual_volume; st.metric(label="Baseline Total Annual Cost", value=f"${total_annual_cost/1e6:.2f}M", delta=f"${(best_resilient_kpis['Weighted Avg Cost ($)'] * annual_volume)/1e6:.2f}M in Best Strategy", delta_color="inverse")
-        with col3: st.metric(label="Est. Monthly Cost of Risk", value=f"${cost_of_risk/1e6:.2f}M", help="Potential financial loss from stockouts in the baseline strategy over a 30-day period.", delta="High Exposure", delta_color="off")
+        # The Risk Speedometer
+        fig_gauge = go.Figure(go.Indicator(
+            mode = "gauge+number",
+            value = baseline_kpis['Weighted Avg Stockout Risk (%)'],
+            title = {'text': "Baseline Stockout Risk"},
+            domain = {'x': [0, 1], 'y': [0, 1]},
+            gauge = {
+                'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
+                'bar': {'color': "rgba(0,0,0,0)"},
+                'bgcolor': "white",
+                'borderwidth': 2,
+                'bordercolor': "#2c2c2c",
+                'steps': [
+                    {'range': [0, 10], 'color': '#28a745'},
+                    {'range': [10, 30], 'color': '#ffc107'},
+                    {'range': [30, 100], 'color': '#dc3545'}],
+                'threshold': {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': 90}}))
+        fig_gauge.update_layout(paper_bgcolor = "#1a1a1a", font = {'color': "white", 'family': "Arial"})
+        st.plotly_chart(fig_gauge, use_container_width=True)
+
         st.divider()
-
         col1_main, col2_main = st.columns([0.6, 0.4], gap="large")
         with col1_main:
-            st.subheader("Strategy Risk Profile"); fig, ax = plt.subplots(figsize=(8, 4)); sns.barplot(data=results_df.reset_index(), x='Strategy', y='Weighted Avg Stockout Risk (%)', ax=ax, palette='plasma')
-            ax.set_title(f"Stockout Risk by Sourcing Strategy", fontsize=14, pad=20); ax.set_ylabel("Stockout Risk (%)"); ax.set_xlabel(None); ax.tick_params(axis='x', rotation=15)
-            st.pyplot(fig)
+            st.subheader("Strategy Comparison (Interactive)")
+            fig_bar = px.bar(results_df.reset_index(), x='Strategy', y=['Weighted Avg Cost ($)', 'Weighted Avg Lead Time (days)', 'Weighted Avg Stockout Risk (%)'],
+                             barmode='group', height=400, template='plotly_dark',
+                             labels={'value': 'Value', 'variable': 'KPI'},
+                             title='KPI Comparison Across Strategies')
+            st.plotly_chart(fig_bar, use_container_width=True)
         with col2_main:
-            st.subheader("Strategy Details"); tabs = st.tabs([f"{k}" for k in details_by_strategy.keys()])
+            st.subheader("Strategy Details")
+            tabs = st.tabs([f"{k}" for k in details_by_strategy.keys()])
             for tab, (strategy_name, details) in zip(tabs, details_by_strategy.items()):
                 with tab: st.dataframe(details.style.format({'Sourcing %': '{:.0f}%', 'Final Cost ($)': '${:.2f}', 'Final Lead Time (days)': '{:.0f}', 'Stockout Risk (%)': '{:.2f}%'}), use_container_width=True)
 
         with st.expander("Show Business Continuity Plan & Recommendations", expanded=True):
-            st.markdown(f"""
-            <h4><i data-lucide="file-text"></i> Business Continuity Plan: {selected_component}</h4>
-            <p>Based on a simulated disruption in <strong>{country_to_disrupt}</strong>.</p><hr style='margin-top: 0; margin-bottom: 1rem;'>
-            <h5><i data-lucide="alert-triangle" style="color: #ff4b4b;"></i>  1. Threat Assessment</h5>
-            <p>The current <b>Baseline (Single Source)</b> strategy faces a <b>{baseline_kpis['Weighted Avg Stockout Risk (%)']:.1f}% stockout risk</b>. This is a critical vulnerability with a potential monthly financial impact (Cost of Risk) of approximately <b>${cost_of_risk/1e6:.2f} million</b>.</p>
-            <h5><i data-lucide="shield-check" style="color: #28a745;"></i>  2. Recommended Mitigation Strategy: `{best_resilient_strategy_name}`</h5>
-            <p>Diversification is essential. The <b>`{best_resilient_strategy_name}`</b> strategy is the most effective at mitigating risk:</p>
-            <ul><li><b>Reduces Stockout Risk</b> to a manageable <b>{best_resilient_kpis['Weighted Avg Stockout Risk (%)']:.1f}%</b>.</li><li><b>Total Annual Cost</b> is estimated at <b>${(best_resilient_kpis['Weighted Avg Cost ($)'] * annual_volume)/1e6:.2f} million</b>. This cost increase is a necessary premium for supply chain insurance.</li><li><b>Stabilizes Lead Time</b> to an average of <b>{best_resilient_kpis['Weighted Avg Lead Time (days)']:.0f} days</b>.</li></ul>
-            <h5><i data-lucide="list-checks"></i>  3. Immediate Actions (BCP Phase 1)</h5>
-            <ol><li><b>Secure Buffer Stock:</b> Immediately procure an additional 60-90 days of safety stock for the <b>{selected_component}</b> from the primary supplier to provide an operational buffer.</li><li><b>Initiate Diversification:</b> Form a cross-functional task force to begin qualification and contracting of the suppliers identified in the recommended strategy, prioritizing speed to market.</li><li><b>Onshoring Engagement:</b> If an Indian supplier was modeled, begin strategic engagement to align with the India Semiconductor Mission and secure long-term, domestic supply.</li></ol>
-            """, unsafe_allow_html=True)
+            cost_of_risk = (baseline_kpis['Weighted Avg Stockout Risk (%)'] / 100) * (annual_volume / 365) * line_down_cost * 30
+            diversified_kpis = results_df.loc[results_df.index != 'Baseline (Single Source)'].iloc[0] if len(results_df) > 1 else baseline_kpis
+            st.markdown(f"""<h4><i data-lucide="file-text"></i> BCP for {selected_component}</h4><hr><h5><i data-lucide="alert-triangle" style="color: #ff4b4b;"></i> 1. Threat Assessment</h5><p>The <b>Baseline</b> strategy faces a <b>{baseline_kpis['Weighted Avg Stockout Risk (%)']:.1f}% stockout risk</b> under this scenario, with an estimated monthly Cost of Risk of <b>${cost_of_risk/1e6:.2f}M</b>.</p><h5><i data-lucide="shield-check" style="color: #28a745;"></i> 2. Recommended Mitigation Strategy</h5><p>The <b>{diversified_kpis.name}</b> strategy is the most effective, reducing stockout risk to <b>{diversified_kpis['Weighted Avg Stockout Risk (%)']:.1f}%</b>.</p><h5><i data-lucide="list-checks"></i> 3. Immediate Actions</h5><ol><li><b>Secure Buffer Stock:</b> Procure 60-90 days of safety stock.</li><li><b>Initiate Diversification:</b> Form a task force to qualify and contract with <b>{alt_supplier_name}</b>, allocating {100-sourcing_split}% of volume.</li></ol>""", unsafe_allow_html=True)
 else:
-    st.markdown("""
-        <div style="background-color: #1a1a1a; border-radius: 12px; padding: 2rem; text-align: center; border: 1px solid #2c2c2c;">
-            <i data-lucide="play-circle" style="width: 48px; height: 48px; color: #a1a1a1;"></i>
-            <h3 style="margin-top: 1rem;">Ready to Analyze Your Supply Chain Risk</h3>
-            <p style="color: #a1a1a1;">Configure your component and disruption scenario in the <b>Control Panel</b> on the left, then click <b>Run Simulation</b>.</p>
-        </div>
-    """, unsafe_allow_html=True)
+    st.info("Configure your scenario in the sidebar and click 'Run Simulation' to generate your risk analysis.")
 
 st.markdown("<script>lucide.createIcons();</script>", unsafe_allow_html=True)
