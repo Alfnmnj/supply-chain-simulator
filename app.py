@@ -1,4 +1,4 @@
-# app.py (Strategic Simulation Platform v9.1 - Definitive)
+# app.py (Strategic Simulation Platform v10.0 - Definitive Hybrid)
 
 import streamlit as st
 import pandas as pd
@@ -88,7 +88,6 @@ with st.sidebar:
     st.radio("Select Analysis Mode", ["Guided", "Expert"], key="mode", horizontal=True)
     st.divider()
 
-    # --- GUIDED MODE UI ---
     if st.session_state.mode == "Guided":
         st.markdown("<h5><i class='bi bi-truck'></i> Supply Chain Risk Simulator</h5>", unsafe_allow_html=True)
         selected_component = st.selectbox("1. Select Critical Component", supplier_df['Component'].unique())
@@ -96,19 +95,11 @@ with st.sidebar:
         primary_supplier = component_suppliers[component_suppliers['Is Primary']].iloc[0]
         secondary_supplier = component_suppliers[~component_suppliers['Is Primary']].iloc[0]
         st.markdown(f"<p style='font-size: 0.9rem;'>Primary: <b>{primary_supplier['Supplier']}</b> ({primary_supplier['Country']})<br>Alternate: <b>{secondary_supplier['Supplier']}</b> ({secondary_supplier['Country']})</p>", unsafe_allow_html=True)
-        
-        with st.expander("2. Define Geopolitical Scenario", expanded=True):
-            scenario_choice = st.selectbox("Select Scenario", ["Stable", "Tense Relations", "Regional Conflict", "Trade Embargo"])
-            SCENARIO_PARAMS = {
-                "Stable": {"tariff": 0, "supply_cut": 0, "delay": 0, "desc": "Normal business operations."},
-                "Tense Relations": {"tariff": 0.10, "supply_cut": 0.05, "delay": 5, "desc": "Models minor tariffs and slight logistics friction."},
-                "Regional Conflict": {"tariff": 0.20, "supply_cut": 0.30, "delay": 21, "desc": "Models significant tariffs, supply cuts, and shipping delays."},
-                "Trade Embargo": {"tariff": 0.50, "supply_cut": 0.80, "delay": 60, "desc": "Models a worst-case scenario with severe tariffs and near-total supply cuts."}
-            }
-            scenario = SCENARIO_PARAMS[scenario_choice]
-            scenario['country'] = primary_supplier['Country']
-            st.info(f"**Scenario Effect:** {scenario['desc']}", icon="ℹ️")
-
+        with st.expander("2. Define Disruption Scenario", expanded=True):
+            disruption_country = st.selectbox("Disrupted Country", supplier_df['Country'].unique(), index=supplier_df['Country'].unique().tolist().index(primary_supplier['Country']))
+            disruption_tariff = st.slider("Tariff Increase", 0, 100, 20, 5, format="%d%%") / 100.0
+            disruption_supply_cut = st.slider("Supply Cut Probability", 0, 100, 50, 5, format="%d%%") / 100.0
+            disruption_delay = st.slider("Logistics Delay (days)", 0, 60, 14, 1)
         with st.expander("3. Configure Resilient Strategy", expanded=True):
             resilient_mix = st.slider(f"Sourcing % from Alternate ({secondary_supplier['Country']})", 0, 100, 40, 5)
 
@@ -116,7 +107,7 @@ with st.sidebar:
         st.markdown('<h5><i class="bi bi-sliders"></i> 1. Define Variables</h5>', unsafe_allow_html=True)
         for i, var in enumerate(st.session_state.variables):
             with st.container():
-                c1,c2 = st.columns([0.85, 0.15]);
+                c1,c2 = st.columns([0.85, 0.15])
                 with c1:
                     var['name'] = st.text_input("Name", var['name'], key=f"name_{i}").replace(" ", "_"); var['dist'] = st.selectbox("Dist", ["Normal", "Uniform", "Constant"], index=["Normal", "Uniform", "Constant"].index(var['dist']), key=f"dist_{i}")
                     if var['dist'] == "Normal": p1, p2 = st.columns(2); var['param1'] = p1.number_input("Mean (μ)", value=var['param1'], key=f"p1_{i}"); var['param2'] = p2.number_input("Std Dev (σ)", value=var['param2'], key=f"p2_{i}", min_value=0.0)
@@ -151,11 +142,13 @@ if run_button:
         baseline_suppliers = primary_supplier.to_frame().T; baseline_suppliers['Sourcing %'] = 100.0
         resilient_suppliers = pd.concat([primary_supplier.to_frame().T, secondary_supplier.to_frame().T])
         resilient_suppliers['Sourcing %'] = [100 - resilient_mix, resilient_mix]
+        scenario = {'country': disruption_country, 'tariff': disruption_tariff, 'supply_cut': disruption_supply_cut, 'delay': disruption_delay}
         with st.spinner("Running comparative simulations..."):
             baseline_results = run_supply_chain_simulation(baseline_suppliers, scenario)
             resilient_results = run_supply_chain_simulation(resilient_suppliers, scenario)
         
         st.markdown("<h3><i class='bi bi-clipboard-data-fill'></i> Geopolitical Risk Dashboard</h3>", unsafe_allow_html=True)
+        st.markdown("<h6>Key Performance Indicators under Disruption</h6>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns(3, gap="large")
         with col1: st.metric("Landed Cost (Resilient)", f"${resilient_results['Avg Cost']:.2f}", f"{((resilient_results['Avg Cost'] - baseline_results['Avg Cost'])/baseline_results['Avg Cost']):.1%} vs Baseline", delta_color="inverse")
         with col2: st.metric("Lead Time (Resilient)", f"{resilient_results['Avg Lead Time']:.0f} days", f"{resilient_results['Avg Lead Time'] - baseline_results['Avg Lead Time']:.0f} days vs Baseline")
@@ -170,8 +163,7 @@ if run_button:
         with st.expander("Show Actionable Recommendations & BCP", expanded=True):
             cost_premium = resilient_results['Avg Cost'] - baseline_results['Avg Cost']
             risk_reduction = baseline_results['Avg Stockout Risk'] - resilient_results['Avg Stockout Risk']
-            
-            st.markdown(f"""<h4>Business Continuity Plan for: <b>{selected_component}</b></h4><p>Based on a simulated <strong>{scenario_choice}</strong> scenario in <strong>{scenario['country']}</strong>.</p>
+            st.markdown(f"""<h4>Business Continuity Plan for: <b>{selected_component}</b></h4><p>Based on a simulated disruption in <strong>{disruption_country}</strong>.</p>
             <h5><i class="bi bi-exclamation-triangle-fill" style="color: #ff4b4b;"></i>  Threat Assessment (Baseline Single-Source Strategy)</h5>
             <p>Our current single-source strategy is critically exposed. Under the simulated scenario, the average landed cost rises to <b>${baseline_results['Avg Cost']:.2f}</b>, and the probability of a stockout event reaches an untenable <b>{baseline_results['Avg Stockout Risk']:.1f}%</b>.</p>
             <h5><i class="bi bi-shield-check" style="color: #28a745;"></i>  Resilience Investment Analysis (Diversified Strategy)</h5>
@@ -180,7 +172,8 @@ if run_button:
             <li>The <b>Landed Cost</b> stabilizes at <b>${resilient_results['Avg Cost']:.2f}</b> per unit. This represents a calculated 'insurance premium' of <b>${cost_premium:.2f}</b> per unit to safeguard against catastrophic production halts.</li>
             <li>The blended <b>Lead Time</b> is projected to be <b>{resilient_results['Avg Lead Time']:.0f} days</b>.</li></ul>
             <h5><i class="bi bi-card-checklist"></i> Recommended Actions</h5><ol><li><b>Diversify Sourcing:</b> The simulation provides a clear, data-driven case to immediately proceed with qualifying <b>{secondary_supplier['Supplier']}</b> and implementing the {100-resilient_mix}/{resilient_mix} sourcing strategy.</li>
-            <li><b>Build Safety Stock:</b> The simulated logistics disruption of <b>{scenario['delay']} days</b> highlights the need to increase our safety stock levels by at least this amount to buffer against initial supply shocks.</li></ol>
+            <li><b>Build Safety Stock:</b> The simulated logistics disruption of <b>{disruption_delay} days</b> highlights the need to increase our safety stock levels by at least this amount to buffer against initial supply shocks.</li>
+            <li><b>Conduct Further Analysis:</b> Use the 'Expert Mode' of this platform to model the financial impact of a line-down event and calculate the full ROI of this resilience investment.</li></ol>
             """, unsafe_allow_html=True)
 
     else: # Expert Mode Display
@@ -214,4 +207,3 @@ if run_button:
 else:
     st.markdown("<div style='text-align: center; padding-top: 50px;'><h3 style='color: #8b949e;'>Configure your scenario in the sidebar and click 'Run Simulation' to begin.</h3></div>", unsafe_allow_html=True)
     
-
