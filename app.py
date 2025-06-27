@@ -1,4 +1,4 @@
-# app.py (Definitive Version - Fulfilling the Original Prompt)
+# app.py (Definitive Version - Narrative & Visuals)
 
 import streamlit as st
 import pandas as pd
@@ -52,12 +52,12 @@ def generate_dynamic_strategies(component, primary_supplier, alt_supplier_name, 
     strategies = {}
     if primary_supplier.empty: return strategies
     primary_df = primary_supplier.copy(); primary_df['Sourcing %'] = 100.0
-    strategies['Baseline (Single Source)'] = primary_df
+    strategies['Baseline'] = primary_df
     if alt_supplier_name:
         alt_supplier_df = df[(df['Component'] == component) & (df['Supplier'] == alt_supplier_name)].copy()
         if not alt_supplier_df.empty:
             diversified_df = pd.concat([primary_df, alt_supplier_df]); diversified_df['Sourcing %'] = [sourcing_split, 100 - sourcing_split]
-            strategies[f"Resilient ({sourcing_split}/{100-sourcing_split})"] = diversified_df
+            strategies["Resilient"] = diversified_df
     return strategies
 
 @st.cache_data
@@ -107,7 +107,7 @@ with st.sidebar:
     st.subheader("2. Disruption Scenario"); country_to_disrupt = st.selectbox("Country to Disrupt", master_df['Country'].unique(), index=1)
     tariff_percent=st.slider("Import Tariff (%)", 0, 100, 25, 5); supply_cut_percent=st.slider("Supply Cut Probability (%)", 0, 100, 60, 5)
     logistics_delay_days=st.slider("Logistics Delay (days)", 0, 90, 21, 3)
-
+    
     st.divider(); st.subheader("3. Financial Context"); annual_volume=st.number_input("Annual Unit Volume", 1000, 10000000, 1000000, 10000)
     line_down_cost=st.number_input("Cost of Halt per Day ($)", 10000, 5000000, 500000, 10000)
     
@@ -126,34 +126,64 @@ if run_button:
 
         st.markdown("<h2><i data-lucide='bar-chart-3'></i> Executive Dashboard</h2>", unsafe_allow_html=True)
         
-        baseline_kpis = results_df.loc['Baseline (Single Source)']
-        resilient_kpis = results_df.loc[results_df.index != 'Baseline (Single Source)'].iloc[0] if len(results_df) > 1 else baseline_kpis
+        baseline_kpis = results_df.loc['Baseline']
+        resilient_kpis = results_df.loc['Resilient'] if 'Resilient' in results_df.index else baseline_kpis
 
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Baseline Stockout Risk", f"{baseline_kpis['Weighted Avg Stockout Risk (%)']:.1f}%")
-        col2.metric("Resilient Stockout Risk", f"{resilient_kpis['Weighted Avg Stockout Risk (%)']:.1f}%", delta=f"{resilient_kpis['Weighted Avg Stockout Risk (%)'] - baseline_kpis['Weighted Avg Stockout Risk (%)']:.1f} pts", delta_color="inverse")
-        col3.metric("Resilient Annual Cost", f"${(resilient_kpis['Weighted Avg Cost ($)'] * annual_volume)/1e6:.2f}M", delta=f"{((resilient_kpis['Weighted Avg Cost ($)']-baseline_kpis['Weighted Avg Cost ($)'])/baseline_kpis['Weighted Avg Cost ($)'])*100:.1f}% vs Baseline")
-        cost_of_risk = (baseline_kpis['Weighted Avg Stockout Risk (%)'] / 100) * (annual_volume / 365) * line_down_cost * 30
-        col4.metric("Baseline Monthly Cost of Risk", f"${cost_of_risk/1e6:.2f}M", help="Potential financial loss from stockouts in the baseline strategy over a 30-day period.")
+        # --- THE NEW EASY-TO-UNDERSTAND VISUAL ---
+        st.subheader("Risk vs. Cost Analysis")
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=results_df['Weighted Avg Cost ($)'], y=results_df['Weighted Avg Stockout Risk (%)'],
+            mode='markers+text', text=results_df.index,
+            marker=dict(size=15, color=['#dc3545', '#007bff']),
+            textposition="top right"
+        ))
+        if 'Resilient' in results_df.index:
+            fig.add_annotation(x=resilient_kpis['Weighted Avg Cost ($)'], y=resilient_kpis['Weighted Avg Stockout Risk (%)'],
+                               ax=baseline_kpis['Weighted Avg Cost ($)'], ay=baseline_kpis['Weighted Avg Stockout Risk (%)'],
+                               text="Resilience Investment", arrowhead=2, arrowwidth=3)
+        
+        fig.update_layout(title_text='Strategy Positioning', xaxis_title='Landed Cost per Unit ($)', yaxis_title='Stockout Risk (%)',
+                          template='plotly_dark', showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
 
         st.divider()
-        st.subheader("Detailed KPI Comparison")
-        chart_col1, chart_col2, chart_col3 = st.columns(3)
-        with chart_col1:
-            fig = px.bar(results_df, y='Weighted Avg Stockout Risk (%)', text_auto='.1f', title="Stockout Risk (%)", template='plotly_dark')
-            fig.update_traces(marker_color='#dc3545')
-            st.plotly_chart(fig, use_container_width=True)
-        with chart_col2:
-            fig = px.bar(results_df, y='Weighted Avg Cost ($)', text_auto='.2f', title="Landed Cost ($)", template='plotly_dark')
-            fig.update_traces(marker_color='#ffc107')
-            st.plotly_chart(fig, use_container_width=True)
-        with chart_col3:
-            fig = px.bar(results_df, y='Weighted Avg Lead Time (days)', text_auto='.0f', title="Lead Time (days)", template='plotly_dark')
-            fig.update_traces(marker_color='#007bff')
-            st.plotly_chart(fig, use_container_width=True)
+        with st.expander("View Detailed KPI Breakdown"):
+            st.subheader("Detailed KPI Comparison")
+            chart_col1, chart_col2, chart_col3 = st.columns(3)
+            with chart_col1:
+                fig_risk = px.bar(results_df, y='Weighted Avg Stockout Risk (%)', text_auto='.1f', title="Stockout Risk (%)", color_discrete_sequence=['#dc3545'])
+                st.plotly_chart(fig_risk, use_container_width=True)
+            with chart_col2:
+                fig_cost = px.bar(results_df, y='Weighted Avg Cost ($)', text_auto='.2f', title="Landed Cost ($)", color_discrete_sequence=['#ffc107'])
+                st.plotly_chart(fig_cost, use_container_width=True)
+            with chart_col3:
+                fig_lead = px.bar(results_df, y='Weighted Avg Lead Time (days)', text_auto='.0f', title="Lead Time (days)", color_discrete_sequence=['#007bff'])
+                st.plotly_chart(fig_lead, use_container_width=True)
 
         with st.expander("Show Business Continuity Plan (BCP)", expanded=True):
-            st.markdown(f"""<h4><i data-lucide="file-text"></i> BCP for: {selected_component}</h4><hr><h5><i data-lucide="alert-triangle" style="color: #ff4b4b;"></i> 1. Threat Assessment</h5><p>Our <b>Baseline</b> strategy for the <b>{selected_component}</b> faces a <b>{baseline_kpis['Weighted Avg Stockout Risk (%)']:.1f}% stockout risk</b> under the simulated disruption in <b>{country_to_disrupt}</b>.</p><h5><i data-lucide="shield-check" style="color: #28a745;"></i> 2. Recommended Mitigation Strategy</h5><p>The <b>{resilient_kpis.name}</b> is the recommended approach, reducing risk to <b>{resilient_kpis['Weighted Avg Stockout Risk (%)']:.1f}%</b>.</p><h5><i data-lucide="list-checks"></i> 3. Immediate Actions</h5><ol><li><b>Secure Buffer Stock:</b> Procure 60-90 days of safety stock for the <b>{selected_component}</b>.</li><li><b>Initiate Diversification:</b> Form a task force to qualify and contract with <b>{alt_supplier_name}</b>, allocating {100-sourcing_split}% of volume.</li></ol>""", unsafe_allow_html=True)
+            risk_reduction = baseline_kpis['Weighted Avg Stockout Risk (%)'] - resilient_kpis['Weighted Avg Stockout Risk (%)']
+            cost_increase_pct = ((resilient_kpis['Weighted Avg Cost ($)'] - baseline_kpis['Weighted Avg Cost ($)']) / baseline_kpis['Weighted Avg Cost ($)']) * 100
+            st.markdown(f"""
+            <h4><i data-lucide="file-text"></i> Business Continuity Plan: {selected_component}</h4><hr>
+            <h5><i data-lucide="alert-triangle" style="color: #ff4b4b;"></i> 1. Threat Assessment</h5>
+            <p>Under a geopolitical disruption in <b>{country_to_disrupt}</b>, our current <b>Baseline (Single Source)</b> strategy for the <b>{selected_component}</b> is untenable. The simulation projects a <b>{baseline_kpis['Weighted Avg Stockout Risk (%)']:.1f}% stockout probability</b>, which poses an existential threat to our production continuity.</p>
+            
+            <h5><i data-lucide="shield-check" style="color: #28a745;"></i> 2. Recommended Strategy & Business Case</h5>
+            <p>We recommend immediate diversification to the <b>Resilient Strategy</b> by partnering with <b>{alt_supplier_name}</b>. This is a clear business case:</p>
+            <ul>
+                <li><b>The Investment:</b> We will incur a calculated <b>{cost_increase_pct:.1f}% increase</b> in the landed cost per component.</li>
+                <li><b>The Return:</b> In exchange, we "buy down" our risk of production failure by a massive <b>{risk_reduction:.1f} percentage points</b>, reducing the stockout probability to a manageable <b>{resilient_kpis['Weighted Avg Stockout Risk (%)']:.1f}%</b>.</li>
+            </ul>
+            <p>This trade-off is not just prudent; it is essential for safeguarding revenue and market position.</p>
+            
+            <h5><i data-lucide="list-checks"></i> 3. Immediate Action Plan (Phase 1)</h5>
+            <ol>
+                <li><b>Form Task Force:</b> Immediately stand up a cross-functional team (Engineering, Procurement, Quality) to lead the supplier diversification project.</li>
+                <li><b>Initiate Qualification:</b> Begin the technical and quality qualification process for <b>{alt_supplier_name}</b> for the {selected_component}.</li>
+                <li><b>Secure Buffer Stock:</b> Place immediate orders to increase safety stock of the primary component by 60 days to provide an operational shield during the transition period.</li>
+            </ol>
+            """, unsafe_allow_html=True)
 else:
     st.info("Configure your strategy and disruption scenario in the sidebar, then click 'Run Simulation'.")
 
