@@ -1,4 +1,4 @@
-# app.py (Strategic Simulation Platform v4.0 - With Model Templates)
+# app.py (Strategic Simulation Platform v4.1 - Indentation Corrected)
 
 import streamlit as st
 import pandas as pd
@@ -65,7 +65,6 @@ templates = {
 # 3. CORE SIMULATION ENGINE (Unchanged)
 # ==============================================================================
 def run_monte_carlo(formula, variables, num_simulations):
-    # This function remains the same as v3.1
     simulation_results = []
     for _ in range(num_simulations):
         local_scope = {var['name']: (np.random.normal(var['param1'], var['param2']) if var['dist'] == 'Normal' else
@@ -92,7 +91,6 @@ with st.sidebar:
     st.markdown("Select a template or build a model from scratch.")
     st.divider()
 
-    # --- Template Loader ---
     st.markdown('<h5><i class="bi bi-journal-album"></i> 1. Load a Model Template</h5>', unsafe_allow_html=True)
     template_choice = st.selectbox("Select a pre-built model", templates.keys(), label_visibility="collapsed")
     if st.button("Load Template", use_container_width=True):
@@ -101,9 +99,7 @@ with st.sidebar:
         st.rerun()
     st.divider()
 
-    # --- Variable & Formula Editors ---
     st.markdown('<h5><i class="bi bi-sliders"></i> 2. Define Input Variables</h5>', unsafe_allow_html=True)
-    # This section for defining variables remains the same as v3.1...
     for i, var in enumerate(st.session_state.variables):
         with st.container():
             c1, c2 = st.columns([0.85, 0.15])
@@ -113,10 +109,17 @@ with st.sidebar:
                 if var['dist'] == "Normal": p1, p2 = st.columns(2); var['param1'] = p1.number_input("Mean (μ)", value=var['param1'], key=f"p1_{i}"); var['param2'] = p2.number_input("Std Dev (σ)", value=var['param2'], key=f"p2_{i}", min_value=0.0)
                 elif var['dist'] == "Uniform": p1, p2 = st.columns(2); var['param1'] = p1.number_input("Min", value=var['param1'], key=f"p1_{i}"); var['param2'] = p2.number_input("Max", value=var['param2'], key=f"p2_{i}")
                 else: var['param1'] = st.number_input("Value", value=var['param1'], key=f"p1_{i}"); var['param2'] = 0
-            with c2: st.write(""); st.write("");
-                if st.button("🗑️", key=f"del_{i}", help="Remove this variable", use_container_width=True): st.session_state.variables.pop(i); st.rerun()
+            with c2: 
+                st.write("") 
+                st.write("")
+                # ** THE FIX IS HERE: The next line has been correctly un-indented. **
+                if st.button("🗑️", key=f"del_{i}", help="Remove this variable", use_container_width=True):
+                    st.session_state.variables.pop(i)
+                    st.rerun()
             st.markdown("<hr style='margin:10px 0; border-color: #30363d;'>", unsafe_allow_html=True)
-    if st.button("Add Variable", use_container_width=True): st.session_state.variables.append({'name': f'Variable_{len(st.session_state.variables)+1}', 'dist': 'Normal', 'param1': 100.0, 'param2': 10.0}); st.rerun()
+    if st.button("Add Variable", use_container_width=True): 
+        st.session_state.variables.append({'name': f'Variable_{len(st.session_state.variables)+1}', 'dist': 'Normal', 'param1': 100.0, 'param2': 10.0})
+        st.rerun()
 
     st.markdown('<h5><i class="bi bi-calculator-fill"></i> 3. Define Model Formula</h5>', unsafe_allow_html=True)
     st.session_state.formula = st.text_area("Formula", st.session_state.formula, label_visibility="collapsed")
