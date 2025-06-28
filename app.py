@@ -1,4 +1,4 @@
-# app.py (Definitive Version with State Management Fix)
+# app.py (Definitive Version with All Visuals & Corrected Memorandum)
 
 import streamlit as st
 import pandas as pd
@@ -21,8 +21,9 @@ st.markdown("""
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         html, body, [class*="st-"] { font-family: 'Inter', sans-serif; }
         .stApp { background-color: #0E1117; color: #FAFAFA; }
-        h1, h2, h3 { font-weight: 700; color: #FFFFFF; }
+        h1, h2, h3, h4 { font-weight: 700; color: #FFFFFF; }
         .card { background-color: #161B22; border-radius: 12px; padding: 25px; border: 1px solid #30363D; }
+        .stMetric { background-color: transparent; border: none; padding: 0; }
         .stButton>button {
             font-size: 1rem; font-weight: 600; color: #FFFFFF; background-color: #007AFF;
             border-radius: 8px; border: none; padding: 12px 24px; transition: all 0.2s ease-in-out;
@@ -55,13 +56,12 @@ def load_data():
 master_df, stockout_inputs = load_data()
 
 EVENT_TEMPLATES = {
-    "Normal Operations": {'export_ban_country': 'None', 'export_ban_percent': 0, 'tariff_country': 'None', 'tariff_percent': 0, 'transit_delay': 0, 'supplier_shutdown_prob': 0.0, 'demand_shock': 0, 'inventory_buffer': 30},
-    "Taiwan Strait Conflict": {'export_ban_country': 'Taiwan', 'export_ban_percent': 75, 'tariff_country': 'Taiwan', 'tariff_percent': 25, 'transit_delay': 30, 'supplier_shutdown_prob': 0.5, 'demand_shock': -20, 'inventory_buffer': 90},
-    "Global Logistics Crisis": {'export_ban_country': 'None', 'export_ban_percent': 0, 'tariff_country': 'None', 'tariff_percent': 5, 'transit_delay': 45, 'supplier_shutdown_prob': 0.1, 'demand_shock': -10, 'inventory_buffer': 60},
-    "Korean Peninsula Tensions": {'export_ban_country': 'South Korea', 'export_ban_percent': 40, 'tariff_country': 'South Korea', 'tariff_percent': 15, 'transit_delay': 10, 'supplier_shutdown_prob': 0.3, 'demand_shock': 0, 'inventory_buffer': 45}
+    "Normal Operations": {'export_ban_country': 'None', 'export_ban_percent': 0, 'tariff_country': 'None', 'tariff_percent': 0, 'transit_delay': 0, 'supplier_shutdown_prob': 0.0},
+    "Taiwan Strait Conflict": {'export_ban_country': 'Taiwan', 'export_ban_percent': 75, 'tariff_country': 'Taiwan', 'tariff_percent': 25, 'transit_delay': 30, 'supplier_shutdown_prob': 0.5},
+    "Global Logistics Crisis": {'export_ban_country': 'None', 'export_ban_percent': 0, 'tariff_country': 'None', 'tariff_percent': 5, 'transit_delay': 45, 'supplier_shutdown_prob': 0.1},
+    "Korean Peninsula Tensions": {'export_ban_country': 'South Korea', 'export_ban_percent': 40, 'tariff_country': 'South Korea', 'tariff_percent': 15, 'transit_delay': 10, 'supplier_shutdown_prob': 0.3}
 }
 
-# (Core simulation functions remain unchanged and robust)
 def generate_dynamic_strategies(component, primary_supplier, alt_supplier_name, sourcing_split, df):
     strategies = {};
     if primary_supplier.empty: return strategies
@@ -74,13 +74,13 @@ def generate_dynamic_strategies(component, primary_supplier, alt_supplier_name, 
     return strategies
 
 @st.cache_data
-def monte_carlo_stockout_simulation(base_lt, transit_delay, supply_cut_prob, demand_shock_pct, inventory_buffer_days):
-    n_simulations = 1000; avg_daily_demand = 100 * (1 + demand_shock_pct / 100); safety_stock = avg_daily_demand * inventory_buffer_days
+def monte_carlo_stockout_simulation(base_lt, transit_delay, supply_cut_prob):
+    n_simulations = 1000; avg_daily_demand = 100; safety_stock = avg_daily_demand * 30
     lt_dist = np.random.normal(base_lt + transit_delay, base_lt * 0.1, n_simulations)
     stockout_events = 0
     for lead_time in lt_dist:
         if np.random.rand() < supply_cut_prob: stockout_events += 1; continue
-        demand_during_lt = np.random.normal(avg_daily_demand * lead_time, avg_daily_demand * lead_time * stockout_inputs['Forecast error (σ/μ)']['volatile'])
+        demand_during_lt = np.random.normal(avg_daily_demand * lead_time, avg_daily_demand * lead_time * 0.2)
         if safety_stock < (demand_during_lt - (avg_daily_demand * lead_time)): stockout_events += 1
     return stockout_events / n_simulations
 
@@ -91,76 +91,113 @@ def run_full_simulation(strategy_df, scenario):
         if row['Country'] == scenario['tariff_country']: cost *= (1 + scenario['tariff_percent'] / 100)
         supply_cut_prob = scenario['supplier_shutdown_prob'];
         if row['Country'] == scenario['export_ban_country']: supply_cut_prob = max(supply_cut_prob, scenario['export_ban_percent'] / 100)
-        stockout_risk = monte_carlo_stockout_simulation(row['Base Lead Time (days)'], scenario['transit_delay'], supply_cut_prob, scenario['demand_shock'], scenario['inventory_buffer'])
+        stockout_risk = monte_carlo_stockout_simulation(row['Base Lead Time (days)'], scenario['transit_delay'], supply_cut_prob)
         total_cost += cost * sourcing_pct; total_lt += row['Base Lead Time (days)'] * sourcing_pct; total_risk += stockout_risk * sourcing_pct
     return {'Cost': total_cost, 'Lead Time': total_lt, 'Stockout Risk': total_risk * 100}
 
-def generate_memorandum_pdf(results_df, scenario, component, alt_supplier, split):
-    # (PDF generation code remains the same as the corrected version)
-    pdf = FPDF(); pdf.add_page(); pdf.set_font('Arial', '', 11)
-    pdf.cell(0, 6, f"TO: Executive Leadership Committee", 0, 1); pdf.cell(0, 6, f"FROM: Supply Chain Strategy Department", 0, 1); pdf.cell(0, 6, f"DATE: {datetime.now().strftime('%Y-%m-%d')}", 0, 1)
-    pdf.set_font('Arial', 'B', 11); pdf.cell(0, 6, f"SUBJECT: Quantified Risk Analysis & BCP for {component}", 0, 1); pdf.ln(10)
-    pdf.set_font('Arial', 'B', 12); pdf.cell(0, 10, "1. Executive Summary", 0, 1); pdf.set_font('Arial', '', 11)
+# ==============================================================================
+# 3. MEMORANDUM GENERATION ENGINE (REBUILT & ROBUST)
+# ==============================================================================
+class PDF(FPDF):
+    def header(self):
+        self.set_font('Helvetica', 'B', 12)
+        self.cell(0, 10, 'CONFIDENTIAL: STRATEGIC RISK BRIEFING', 0, 1, 'C')
+        self.ln(5)
+
+    def footer(self):
+        self.set_y(-15); self.set_font('Helvetica', 'I', 8)
+        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+
+    def chapter_title(self, title):
+        self.set_font('Helvetica', 'B', 12); self.cell(0, 10, title, 0, 1, 'L'); self.ln(2)
+
+    def chapter_body(self, text):
+        self.set_font('Helvetica', '', 11); self.multi_cell(0, 6, text)
+
+def generate_memorandum_pdf(results_df, scenario, component, primary_supplier_name, alt_supplier_name, split):
+    pdf = PDF(); pdf.add_page(); pdf.set_font('Helvetica', '', 11)
+    
+    # Memo Header
+    pdf.cell(0, 6, "TO: Executive Leadership Committee (CEO, CFO, COO)", 0, 1)
+    pdf.cell(0, 6, "FROM: Supply Chain Strategy Department", 0, 1)
+    pdf.cell(0, 6, f"DATE: {datetime.now().strftime('%Y-%m-%d')}", 0, 1)
+    pdf.set_font('Helvetica', 'B', 11)
+    pdf.cell(0, 6, f"SUBJECT: Urgent: Quantified Risk Analysis and BCP for {component}", 0, 1)
+    pdf.ln(10)
+    
     baseline_kpis = results_df.loc['Baseline']
-    resilient_kpis = results_df.loc['Resilient'] if 'Resilient' in results_df.index else baseline_kpis
+    resilient_kpis = results_df.loc['Resilient']
     risk_reduction = baseline_kpis['Stockout Risk'] - resilient_kpis['Stockout Risk']
-    cost_increase_pct = ((resilient_kpis['Cost'] - baseline_kpis['Cost']) / baseline_kpis['Cost']) * 100 if baseline_kpis['Cost'] > 0 else 0
-    summary_text = f"This briefing addresses the critical risk to our supply of the {component} arising from the simulated '{scenario['name']}' scenario. Our current single-sourcing strategy faces a {baseline_kpis['Stockout Risk']:.1f}% stockout probability. We recommend a dual-sourcing strategy with {alt_supplier}. For a calculated {cost_increase_pct:.1f}% increase in component cost, we can reduce our stockout risk by {risk_reduction:.1f} percentage points to a manageable {resilient_kpis['Stockout Risk']:.1f}%."
-    pdf.multi_cell(0, 6, summary_text); pdf.ln(5)
-    # ... (rest of PDF content) ...
+    cost_increase_pct = ((resilient_kpis['Cost'] - baseline_kpis['Cost']) / baseline_kpis['Cost']) * 100
+
+    # 1. Executive Summary
+    pdf.chapter_title("1. Executive Summary")
+    summary_text = f"This briefing outlines the quantifiable risk to our supply of the critical {component} arising from the simulated '{scenario['name']}' scenario. Our current single-sourcing strategy faces a {baseline_kpis['Stockout Risk']:.1f}% stockout probability, an unacceptable threat to production. This document presents a data-driven Business Continuity Plan (BCP) centered on a resilient dual-sourcing strategy with {alt_supplier_name}. The simulation proves that for a calculated {cost_increase_pct:.1f}% increase in component cost, we can reduce our stockout risk by over {risk_reduction:.1f} percentage points to a manageable {resilient_kpis['Stockout Risk']:.1f}%."
+    pdf.chapter_body(summary_text)
+    pdf.ln(5)
+
+    # 2. Investigation & Simulation Methodology
+    pdf.chapter_title("2. Investigation & Simulation Methodology")
+    method_text = f"To ground our analysis in data, we used the Strategic Risk Dashboard. The critical component analyzed was the '{component}'. We simulated the '{scenario['name']}' template, which includes a {scenario['export_ban_percent']}% export ban from {scenario['export_ban_country']} and a {scenario['tariff_percent']}% tariff. We compared our Baseline (100% from {primary_supplier_name}) against a Resilient strategy ({split}% from {primary_supplier_name} / {100-split}% from {alt_supplier_name})."
+    pdf.chapter_body(method_text)
+    pdf.ln(5)
+
+    # 3. Analysis of Simulation Results
+    pdf.chapter_title("3. Analysis of Simulation Results")
+    pdf.set_font('Helvetica', 'B', 10); col_widths = [60, 40, 40, 40];
+    header = ['Metric', 'Baseline Strategy', 'Resilient Strategy', 'Improvement']
+    for i, h in enumerate(header): pdf.cell(col_widths[i], 7, h, 1, 0, 'C');
+    pdf.ln()
+    pdf.set_font('Helvetica', '', 10)
+    kpi_data = [
+        ["Stockout Risk (%)", f"{baseline_kpis['Stockout Risk']:.1f}%", f"{resilient_kpis['Stockout Risk']:.1f}%", f"{-risk_reduction:.1f} pts"],
+        ["Landed Cost ($/Unit)", f"${baseline_kpis['Cost']:.2f}", f"${resilient_kpis['Cost']:.2f}", f"+{cost_increase_pct:.1f}%"],
+        ["Lead Time (days)", f"{baseline_kpis['Lead Time']:.0f} days", f"{resilient_kpis['Lead Time']:.0f} days", f"{resilient_kpis['Lead Time'] - baseline_kpis['Lead Time']:.0f} days"]
+    ]
+    for row in kpi_data:
+        for i, item in enumerate(row): pdf.cell(col_widths[i], 6, item, 1)
+        pdf.ln()
+    pdf.ln(5)
+
+    # 4. Proposed Business Continuity Plan
+    pdf.chapter_title("4. Proposed Business Continuity Plan (BCP)")
+    pdf.set_font('Helvetica', 'B', 11); pdf.cell(0, 8, "Phase 1: Immediate Action (0-3 Months)", 0, 1)
+    pdf.set_font('Helvetica', '', 11)
+    pdf.multi_cell(0, 6, f"  - Form Task Force: Immediately stand up a dedicated, cross-functional 'Resilience Task Force' to oversee this initiative.")
+    pdf.multi_cell(0, 6, f"  - Secure Bridge Inventory: Authorize immediate procurement to increase on-hand safety stock of the {component} by 60 days.")
+    pdf.multi_cell(0, 6, f"  - Initiate Supplier Onboarding: Begin the formal technical and quality qualification process with {alt_supplier_name}.")
+    
     return pdf.output(dest='S').encode('latin1')
 
 # ==============================================================================
-# 3. SIDEBAR / CONTROLS
+# 4. SIDEBAR / CONTROLS
 # ==============================================================================
 with st.sidebar:
     st.markdown("<h3><i data-lucide='sliders-horizontal'></i> Simulation Controls</h3>", unsafe_allow_html=True); st.divider()
-    
     st.subheader("Sourcing Strategy"); selected_component = st.selectbox("Critical Component", master_df['Component'].unique())
     primary_supplier = master_df[(master_df['Component']==selected_component) & master_df['Is Primary']]
     alt_suppliers = master_df[(master_df['Component']==selected_component) & (~master_df['Is Primary'])]
     alt_supplier_name, sourcing_split = (st.selectbox("Alternative Supplier", alt_suppliers['Supplier'].unique()), st.slider("Primary Supplier Sourcing %", 0, 100, 60, 5)) if not alt_suppliers.empty else (None, 100)
     
     st.divider(); st.subheader("Geopolitical & Market Scenario")
-    
-    # --- ROBUST STATE MANAGEMENT FOR SCENARIO BUILDER ---
-    # Initialize state if it doesn't exist
-    if 'scenario' not in st.session_state:
-        st.session_state.scenario = EVENT_TEMPLATES["Taiwan Strait Conflict"]
-    
-    # Callback to update state from template
-    def on_template_change():
-        st.session_state.scenario = EVENT_TEMPLATES[st.session_state.event_template]
-
+    def on_template_change(): st.session_state.update(EVENT_TEMPLATES[st.session_state.event_template])
     selected_event = st.selectbox("Select Event Template", options=EVENT_TEMPLATES.keys(), key="event_template", on_change=on_template_change, help="Select a pre-configured event to start with.")
-    
-    st.markdown("_Fine-tune the parameters of the selected event below:_")
-    
-    # All sliders now read from and write to the session state, ensuring consistency
-    st.session_state.scenario['export_ban_country'] = st.selectbox("Export Ban from", ["None", "China", "Taiwan", "South Korea"], index=["None", "China", "Taiwan", "South Korea"].index(st.session_state.scenario['export_ban_country']))
-    st.session_state.scenario['export_ban_percent'] = st.slider("Export Ban Intensity (%)", 0, 100, st.session_state.scenario['export_ban_percent'])
-    st.session_state.scenario['tariff_country'] = st.selectbox("Tariff on", ["None", "China", "Taiwan", "South Korea"], index=["None", "China", "Taiwan", "South Korea"].index(st.session_state.scenario['tariff_country']))
-    st.session_state.scenario['tariff_percent'] = st.slider("Tariff Increase (%)", 0, 100, st.session_state.scenario['tariff_percent'])
-    st.session_state.scenario['transit_delay'] = st.slider("Transit Delay (days)", 0, 45, st.session_state.scenario['transit_delay'])
-    st.session_state.scenario['supplier_shutdown_prob'] = st.slider("Supplier Shutdown Probability", 0.0, 1.0, st.session_state.scenario['supplier_shutdown_prob'])
-    st.session_state.scenario['demand_shock'] = st.slider("Demand Growth Shock (%)", -50, 100, st.session_state.scenario['demand_shock'], help="Simulate a bullwhip effect or sudden market change.")
-    st.session_state.scenario['inventory_buffer'] = st.slider("Inventory Buffer (days)", 0, 120, st.session_state.scenario['inventory_buffer'])
-    
+    st.markdown("_Fine-tune parameters below:_")
+    scenario_params = {
+        'name': selected_event, 'export_ban_country': st.selectbox("Export Ban from", ["None", "China", "Taiwan", "South Korea"], key='export_ban_country'), 'export_ban_percent': st.slider("Export Ban Intensity (%)", 0, 100, key='export_ban_percent'),
+        'tariff_country': st.selectbox("Tariff on", ["None", "China", "Taiwan", "South Korea"], key='tariff_country'), 'tariff_percent': st.slider("Tariff Increase (%)", 0, 100, key='tariff_percent'),
+        'transit_delay': st.slider("Transit Delay (days)", 0, 45, key='transit_delay'), 'supplier_shutdown_prob': st.slider("Supplier Shutdown Probability", 0.0, 1.0, key='supplier_shutdown_prob'),
+    }
     st.divider(); run_button = st.button("Run Simulation", use_container_width=True)
 
 # ==============================================================================
-# 4. MAIN DASHBOARD
+# 5. MAIN DASHBOARD
 # ==============================================================================
 if run_button:
-    # Use the now-guaranteed-to-be-complete scenario from session state
-    current_scenario = st.session_state.scenario.copy()
-    current_scenario['name'] = selected_event
-
     if primary_supplier.empty: st.error(f"No primary supplier defined for {selected_component}.")
     else:
         strategies = generate_dynamic_strategies(selected_component, primary_supplier, alt_supplier_name, sourcing_split, master_df)
-        with st.spinner(f"Simulating '{selected_event}' scenario..."): 
-            results = {name: run_full_simulation(df, current_scenario) for name, df in strategies.items()}
+        with st.spinner(f"Simulating '{selected_event}' scenario..."): results = {name: run_full_simulation(df, scenario_params) for name, df in strategies.items()}
         results_df = pd.DataFrame(results).T
 
         st.markdown("<h2><i data-lucide='layout-dashboard'></i> Executive Dashboard</h2>", unsafe_allow_html=True)
@@ -169,33 +206,57 @@ if run_button:
         is_resilient_simulated = 'Resilient' in results_df.index
         resilient_kpis = results_df.loc['Resilient'] if is_resilient_simulated else baseline_kpis
 
-        # --- Dashboard content remains the same, now guaranteed to be error-free ---
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        kpi_cols = st.columns(3)
-        risk_reduction = baseline_kpis['Stockout Risk'] - resilient_kpis['Stockout Risk'] if is_resilient_simulated else 0
-        cost_increase_pct = ((resilient_kpis['Cost'] - baseline_kpis['Cost']) / baseline_kpis['Cost']) * 100 if is_resilient_simulated and baseline_kpis['Cost'] > 0 else 0
-        kpi_cols[0].metric("Baseline Stockout Risk", f"{baseline_kpis['Stockout Risk']:.1f}%")
-        kpi_cols[1].metric("Resilient Strategy Risk", f"{resilient_kpis['Stockout Risk']:.1f}%", f"{-risk_reduction:.1f} pts" if is_resilient_simulated else "N/A")
-        kpi_cols[2].metric("Cost of Resilience", f"{cost_increase_pct:+.1f}%" if is_resilient_simulated else "N/A")
-        st.markdown("</div>", unsafe_allow_html=True)
-        
-        if is_resilient_simulated:
-            st.markdown("<h3 style='margin-top: 2rem;'><i data-lucide='compass'></i> Strategy Positioning: Risk vs. Cost</h3>", unsafe_allow_html=True)
-            results_df['Strategy'] = results_df.index
-            fig_matrix = px.scatter(results_df, x="Cost", y="Stockout Risk", size="Lead Time", color="Strategy", color_discrete_map={"Baseline": "#dc3545", "Resilient": "#007AFF"},
-                                    title=f"Strategy Comparison under '{selected_event}' Scenario", template="plotly_dark", size_max=40,
-                                    labels={"Cost": "Landed Cost per Unit ($)", "Stockout Risk": "Stockout Risk (%)"})
-            fig_matrix.add_annotation(x=resilient_kpis['Cost'], y=resilient_kpis['Stockout Risk'], ax=baseline_kpis['Cost'], ay=baseline_kpis['Stockout Risk'],
-                                      text="Journey to Resilience", arrowhead=2, arrowwidth=2, arrowcolor="#007AFF", font=dict(color="#007AFF"))
-            st.plotly_chart(fig_matrix, use_container_width=True)
+        # --- High-Impact Gauge & KPI Cards ---
+        col1, col2 = st.columns([0.4, 0.6])
+        with col1:
+            fig_gauge = go.Figure(go.Indicator(
+                mode="gauge+number", value=baseline_kpis['Stockout Risk'], title={'text': "Baseline Risk Level"},
+                gauge={'axis': {'range': [None, 100]}, 'steps': [{'range': [0,10], 'color': '#28a745'},{'range': [10,30], 'color': '#ffc107'},{'range': [30,100], 'color': '#dc3545'}], 'bar': {'color': 'rgba(255,255,255,0.7)'}}))
+            fig_gauge.update_layout(paper_bgcolor="#161B22", font={'color': "white"}, height=250, margin=dict(l=20, r=20, t=50, b=20))
+            st.plotly_chart(fig_gauge, use_container_width=True)
+        with col2:
+            st.markdown("<div class='card'>", unsafe_allow_html=True)
+            if is_resilient_simulated:
+                kpi_col1, kpi_col2 = st.columns(2)
+                risk_reduction = baseline_kpis['Stockout Risk'] - resilient_kpis['Stockout Risk']
+                cost_increase_pct = ((resilient_kpis['Cost'] - baseline_kpis['Cost']) / baseline_kpis['Cost']) * 100 if baseline_kpis['Cost'] > 0 else 0
+                kpi_col1.metric("Resilient Strategy Risk", f"{resilient_kpis['Stockout Risk']:.1f}%", f"{-risk_reduction:.1f} pts improvement")
+                kpi_col2.metric("Cost of Resilience", f"{cost_increase_pct:+.1f}%", "vs. Baseline")
+            else: st.info("Add an alternative supplier to see a resilience comparison.")
+            st.markdown("</div>", unsafe_allow_html=True)
 
-            with st.expander("Show Executive Briefing & BCP"):
-                st.download_button("Generate Executive Memorandum", 
-                                   generate_memorandum_pdf(results_df, current_scenario, selected_component, alt_supplier_name, sourcing_split),
+        # --- Conditional Tabs for Deep-Dive Analysis ---
+        if is_resilient_simulated:
+            tab1, tab2, tab3 = st.tabs(["📊 Strategic Overview", "💰 Financial Analysis", "📄 Executive Memorandum"])
+            with tab1:
+                st.subheader("Strategy Positioning: Risk vs. Cost Quadrant")
+                results_df['Strategy'] = results_df.index
+                fig_matrix = px.scatter(results_df, x="Cost", y="Stockout Risk", size="Lead Time", color="Strategy",
+                                        title=f"Strategy Comparison under '{selected_event}' Scenario", template="plotly_dark", size_max=40,
+                                        color_discrete_map={"Baseline": "#dc3545", "Resilient": "#007AFF"},
+                                        labels={"Cost": "Landed Cost per Unit ($)", "Stockout Risk": "Stockout Risk (%)"})
+                fig_matrix.add_annotation(x=resilient_kpis['Cost'], y=resilient_kpis['Stockout Risk'], ax=baseline_kpis['Cost'], ay=baseline_kpis['Stockout Risk'], text="Journey to Resilience", arrowhead=2, arrowwidth=2, arrowcolor="#007AFF", font=dict(color="#007AFF"))
+                st.plotly_chart(fig_matrix, use_container_width=True)
+
+            with tab2:
+                st.subheader("Financial Breakdown: The Business Case for Resilience")
+                cost_of_risk = (baseline_kpis['Stockout Risk'] / 100) * (30 * 1000)
+                fig_waterfall = go.Figure(go.Waterfall(
+                    measure=["absolute", "relative", "total", "relative", "absolute"], x=["Baseline Cost", "Monetized Risk", "Total Risk Exposure", "Resilience Investment", "Final Resilient Cost"],
+                    y=[baseline_kpis['Cost'], cost_of_risk, 0, resilient_kpis['Cost'] - baseline_kpis['Cost'], 0],
+                    totals={"marker":{"color":"#8B949E"}}))
+                fig_waterfall.update_layout(title="Cost Analysis: Baseline vs. Resilient Strategy", template="plotly_dark", paper_bgcolor="#161B22", plot_bgcolor="#161B22")
+                st.plotly_chart(fig_waterfall, use_container_width=True)
+
+            with tab3:
+                st.subheader("Business Continuity Plan")
+                st.download_button("📄 Generate Executive Memorandum", 
+                                   generate_memorandum_pdf(results_df, scenario_params, selected_component, primary_supplier['Supplier'].iloc[0], alt_supplier_name, sourcing_split),
                                    file_name=f"BCP_Memo_{selected_component}.pdf", 
                                    mime="application/pdf", use_container_width=True)
+                st.info("Click the button above to download a professional, data-driven BCP memo based on this simulation.")
         else:
-            st.warning("Please select an alternative supplier in the sidebar to generate a resilient strategy and a full comparative analysis.")
+            st.warning("Please select an alternative supplier in the sidebar to generate a full comparative analysis and BCP memo.")
 else:
     st.info("Configure your sourcing strategy and a geopolitical scenario in the sidebar, then click 'Run Simulation'.")
 
